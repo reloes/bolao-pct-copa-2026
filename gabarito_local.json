@@ -1,0 +1,7 @@
+{
+  "_instrucoes": "Gabarito OFICIAL local (fallback quando a Google Sheet não está configurada). 'jogos': nº do jogo → [gols time1, gols time2] na ordem oficial da tabela. 'quem_passa': só para EMPATE no mata-mata (J73-J104) — nome do time (PT ou EN) que avançou nos pênaltis.",
+  "jogos": {
+    "1": [2, 0]
+  },
+  "quem_passa": {}
+}

@@ -1,0 +1,117 @@
+# -*- coding: utf-8 -*-
+"""
+QA do SITE da apuração — prova que a camada scoring.py é FIEL ao oráculo validado:
+
+1. PARIDADE × score_engine: para palpites/reais DECISIVOS (sem empate no mata-mata),
+   as Seções A/B/C/D do site têm de bater EXATAMENTE com o oráculo (que foi validado
+   contra a planilha no QA da apuração). Cenários: sintético 2x1 + os 2 palpites sem
+   empates (Busnito, PB) cruzados entre si.
+2. AUTO-TESTE 1236: cada palpiteiro contra o próprio palpite (com seus 'quem passa')
+   tem de cravar o MÁXIMO A+B+C = 1236 — exceto JAM (ramo indefinido no J73, vale menos).
+3. PENALIDADE DACA: real = só J1 (México 2-0) → A do DACA = 0 (descontado 6); demais
+   palpiteiros pontuam o J1 normalmente; B/C de todos = 0 (grupos reais incompletos).
+4. EMPATES/pênaltis: vencedores derivados = 'quem passa' registrado, para os 5 palpites
+   com empates; gabarito real com empate+avanço propaga certo.
+
+Uso: python3 qa_site.py   (na pasta site/; sai 0 se tudo OK)
+"""
+import sys
+import score_engine as se
+import scoring
+import data as D
+
+fails = []
+
+
+def check(desc, cond, extra=""):
+    print(f"  [{'OK ' if cond else 'FAIL'}] {desc}" + (f" — {extra}" if extra and not cond else ""))
+    if not cond:
+        fails.append(desc)
+
+
+meta, PALPS = D.load_palpites()
+PEN = meta["penalidades"]
+byname = {p["nome"]: p for p in PALPS}
+DECISIVOS = [p["nome"] for p in PALPS if not any(p["scores"][n][0] == p["scores"][n][1]
+                                                 for n in range(73, 105))]
+print(f"Palpiteiros: {[p['nome'] for p in PALPS]}")
+print(f"Sem empates no mata-mata (usáveis na paridade × oráculo): {DECISIVOS}")
+
+# ---------- 1) PARIDADE × score_engine (cenários decisivos)
+print("\n1) Paridade site × oráculo (A/B/C/D) em cenários decisivos:")
+sint = {n: (2, 1) for n in range(1, 105)}
+cenarios = [("sintético 2x1", sint, sint)]
+for a in DECISIVOS:
+    for b in DECISIVOS:
+        cenarios.append((f"{a} × real={b}", byname[a]["scores"], byname[b]["scores"]))
+npar = 0
+for nome, p_sc, r_sc in cenarios:
+    pd_ = scoring.derive_full_adv(p_sc, {})
+    rd_ = scoring.derive_full_adv(r_sc, {})
+    okA = scoring.section_A(p_sc, r_sc)[0] == se.section_A(p_sc, r_sc)[0]
+    okB = scoring.section_B(pd_, rd_, se._group_complete(r_sc))[:1] == se.section_B(p_sc, r_sc)[:1]
+    okC = scoring.section_C(pd_, rd_, p_sc, r_sc)[0] == se.section_C(p_sc, r_sc)[0]
+    okD = scoring.section_D(pd_, rd_, p_sc, r_sc)[0] == se.section_D(p_sc, r_sc)[0]
+    npar += all((okA, okB, okC, okD))
+    if not all((okA, okB, okC, okD)):
+        check(f"paridade {nome}", False, f"A{okA} B{okB} C{okC} D{okD}")
+check(f"paridade em {npar}/{len(cenarios)} cenários", npar == len(cenarios))
+
+# ---------- 2) Auto-teste: palpite × ele mesmo = máximo 1236
+print("\n2) Auto-teste (cada um contra o próprio palpite → máx 1236):")
+for p in PALPS:
+    r = scoring.avaliar(p, p["scores"], p["advancers"], {})
+    if p["nome"] == "JAM":
+        check(f"JAM (ramo indefinido) < 1236 e sem erro", 0 < r["total"] < 1236, f"{r['total']}")
+    else:
+        check(f"{p['nome']}: total = 1236", r["total"] == 1236, f"{r['total']}")
+
+# ---------- 3) Penalidade DACA com o gabarito real atual (J1 = México 2-0)
+print("\n3) Penalidade DACA (real = só J1 México 2-0):")
+real = {1: (2, 0)}
+rows = scoring.ranking(PALPS, real, {}, PEN)
+daca = next(r for r in rows if r["nome"] == "DACA")
+check("DACA: A = 0 no J1 anulado", daca["A"] == 0 and daca["perA"][1] == 0)
+check("DACA: descontado = 6 (tinha cravado 2-0)", daca["descontado"] == 6, str(daca["descontado"]))
+outros = [r for r in rows if r["nome"] != "DACA"]
+check("B/C de todos = 0 (grupos reais incompletos)",
+      all(r["B"] == 0 and r["C"] == 0 for r in rows))
+check("alguém pontuou no J1 sem penalidade",
+      any(r["perA"][1] > 0 for r in outros))
+sem_pen = scoring.ranking(PALPS, real, {}, {})
+d2 = next(r for r in sem_pen if r["nome"] == "DACA")
+check("sem a penalidade, DACA teria 6 no J1", d2["perA"][1] == 6, str(d2["perA"][1]))
+# posições com EMPATE (semântica da planilha: empatados em total+chave dividem a posição)
+ok_pos = all(r["pos"] == 1 + sum(1 for o in rows if o["total"] > r["total"]
+                                 or (o["total"] == r["total"] and o["dkey"] > r["dkey"]))
+             for r in rows)
+check("posição = 1 + nº de estritamente melhores (COUNTIF da planilha)", ok_pos)
+ok_tie = all((r["pos"] == o["pos"]) == ((r["total"], r["dkey"]) == (o["total"], o["dkey"]))
+             for r in rows for o in rows)
+check("mesma posição ⇔ empate exato em total E chave i–xiii", ok_tie)
+lideres = [r["nome"] for r in rows if r["pos"] == 1]
+check(f"líderes empatados dividem o 1º lugar: {lideres}", len(lideres) >= 2)
+
+# ---------- 4) Empates + 'quem passa'
+print("\n4) Empates no mata-mata ('quem passa' respeitado):")
+nadv = nok = 0
+for p in PALPS:
+    pdv = scoring.derive_full_adv(p["scores"], p["advancers"])
+    for num, adv in p["advancers"].items():
+        nadv += 1
+        nok += (pdv["win"][num] == adv)
+check(f"vencedor derivado = 'quem passa' em {nok}/{nadv} empates", nok == nadv)
+jam = scoring.derive_full_adv(byname["JAM"]["scores"], byname["JAM"]["advancers"])
+check("JAM J73 empate sem escolha → vencedor indefinido (None)", jam["win"][73] is None)
+# gabarito real com empate + avanço nos pênaltis (sintético): J73 empatado, avança o time B
+rsint = dict(sint)
+rsint[73] = (1, 1)
+rd73 = scoring.derive_full_adv(rsint, {})
+a73, b73 = rd73["teams"][73]
+rd73p = scoring.derive_full_adv(rsint, {73: b73})
+check("real empatado sem 'quem passa' → indefinido", rd73["win"][73] is None)
+check("real empatado COM 'quem passa' → avança o escolhido", rd73p["win"][73] == b73)
+
+print("\n" + ("✅ QA DO SITE PASSOU — pontuação fiel ao oráculo validado"
+              if not fails else f"❌ QA FALHOU: {fails}"))
+sys.exit(0 if not fails else 1)
