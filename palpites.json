@@ -2151,10 +2151,10 @@
      1
     ]
    },
-   "advancers": {},
-   "sem_escolha": [
-    73
-   ],
+   "advancers": {
+    "73": "Switzerland"
+   },
+   "sem_escolha": [],
    "combo": "ABCDEIJL"
   },
   {

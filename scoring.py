@@ -40,16 +40,16 @@ def derive_full_adv(scores, advancers=None):
             teams[num] = (se._resolve(s1, win, lose), se._resolve(s2, win, lose))
         a, b = teams[num]
         p = scores.get(num)
-        if se._validpair(p) and a and b:
+        if se._validpair(p) and (a or b):
             ga, gb = p
-            if ga > gb:
-                win[num] = a
-            elif gb > ga:
-                win[num] = b
+            if ga > gb:                             # decisivo: propaga o lado vencedor VERBATIM,
+                win[num], lose[num] = a, b          # mesmo se o outro lado estiver indefinido
+            elif gb > ga:                           # (fiel ao winner_f da planilha)
+                win[num], lose[num] = b, a
             else:                                   # EMPATE: decide o 'quem passa' (pênaltis)
                 adv = advancers.get(num)
                 win[num] = adv if adv in (a, b) else None
-            lose[num] = (b if win[num] == a else a) if win[num] else None
+                lose[num] = ((b if adv == a else a) if win[num] else None)
         else:
             win[num] = lose[num] = None
 

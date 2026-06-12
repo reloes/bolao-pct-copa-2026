@@ -13,18 +13,31 @@ import os
 import csv
 import json
 import io
+import unicodedata
 import urllib.request
 import fixture_copa_2026 as fx
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-PT2EN = {v: k for k, v in fx.TEAM_PT.items()}
+
+
+def _norm(s):
+    """Matching tolerante de nome de time: sem acentos, casefold, espaços únicos
+    (organizador digitando 'Suica'/'turquia ' no celular tem que funcionar)."""
+    s = unicodedata.normalize("NFD", str(s))
+    s = "".join(ch for ch in s if not unicodedata.combining(ch))
+    return " ".join(s.casefold().split())
+
+
+_NORM2EN = {}
+for _en, _pt in fx.TEAM_PT.items():
+    _NORM2EN[_norm(_pt)] = _en
+    _NORM2EN[_norm(_en)] = _en
 
 
 def _team_en(name):
     if not isinstance(name, str) or not name.strip():
         return None
-    n = name.strip()
-    return PT2EN.get(n) or (n if n in fx.TEAM_PT else None)
+    return _NORM2EN.get(_norm(name))
 
 
 def _int(v):

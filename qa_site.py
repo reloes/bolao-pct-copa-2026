@@ -58,13 +58,19 @@ for nome, p_sc, r_sc in cenarios:
 check(f"paridade em {npar}/{len(cenarios)} cenários", npar == len(cenarios))
 
 # ---------- 2) Auto-teste: palpite × ele mesmo = máximo 1236
+# (regressão do caso JAM: 'Suiça' digitado sem acento no quem-passa do J73 TEM de ser
+#  reconhecido pelo matching tolerante → sem_escolha vazio → 1236 como todo mundo)
 print("\n2) Auto-teste (cada um contra o próprio palpite → máx 1236):")
 for p in PALPS:
     r = scoring.avaliar(p, p["scores"], p["advancers"], {})
-    if p["nome"] == "JAM":
-        check(f"JAM (ramo indefinido) < 1236 e sem erro", 0 < r["total"] < 1236, f"{r['total']}")
+    if p["sem_escolha"]:
+        check(f"{p['nome']} (ramo indefinido {p['sem_escolha']}) < 1236 e sem erro",
+              0 < r["total"] < 1236, f"{r['total']}")
     else:
         check(f"{p['nome']}: total = 1236", r["total"] == 1236, f"{r['total']}")
+check("nenhum palpiteiro com empate-sem-escolha (todos os 'quem passa' reconhecidos)",
+      not any(p["sem_escolha"] for p in PALPS),
+      str([(p["nome"], p["sem_escolha"]) for p in PALPS if p["sem_escolha"]]))
 
 # ---------- 3) Penalidade DACA com o gabarito real atual (J1 = México 2-0)
 print("\n3) Penalidade DACA (real = só J1 México 2-0):")
@@ -102,7 +108,11 @@ for p in PALPS:
         nok += (pdv["win"][num] == adv)
 check(f"vencedor derivado = 'quem passa' em {nok}/{nadv} empates", nok == nadv)
 jam = scoring.derive_full_adv(byname["JAM"]["scores"], byname["JAM"]["advancers"])
-check("JAM J73 empate sem escolha → vencedor indefinido (None)", jam["win"][73] is None)
+check("JAM J73: 'Suiça' (sem acento) reconhecido → Suíça avança",
+      byname["JAM"]["advancers"].get(73) == "Switzerland" and jam["win"][73] == "Switzerland",
+      f"adv={byname['JAM']['advancers'].get(73)}, win={jam['win'][73]}")
+check("JAM: pódio completo derivado (França campeã)", jam["champion"] == "France",
+      str(jam["champion"]))
 # gabarito real com empate + avanço nos pênaltis (sintético): J73 empatado, avança o time B
 rsint = dict(sint)
 rsint[73] = (1, 1)
