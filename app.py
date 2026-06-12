@@ -8,12 +8,22 @@ Gabarito: Google Sheet do organizador (CSV publicado em st.secrets["GABARITO_CSV
 ou gabarito_local.json. Rode local: streamlit run app.py --server.port 8503
 """
 import urllib.parse
+from datetime import datetime
+from zoneinfo import ZoneInfo
 import streamlit as st
 import pandas as pd
 import fixture_copa_2026 as fx
 import score_engine as se
 import scoring
 import data as D
+import imagem
+
+MESES_PT = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"]
+
+
+@st.cache_data(ttl=60)
+def ranking_png_cached(linhas, n_jogados, quando):
+    return imagem.ranking_png(list(linhas), n_jogados, quando)
 
 st.set_page_config(page_title="Bolão PCT — Copa 2026", page_icon="🏆", layout="wide")
 
@@ -110,6 +120,18 @@ if pagina == "🏅 Ranking":
     cz1.link_button("📲 Compartilhar no WhatsApp", "https://wa.me/?text=" + urllib.parse.quote(zap_url))
     with cz2.expander("ver/copiar o texto da mensagem (com emojis — cole no zap)"):
         st.code(zap, language=None)
+
+    st.subheader("🖼️ Imagem do ranking (para o grupo)")
+    agora = datetime.now(ZoneInfo("America/Sao_Paulo"))
+    quando = f"{agora.day:02d}/{MESES_PT[agora.month - 1]} {agora:%H:%M}"
+    linhas_img = tuple((r["pos"], r["nome"], r["total"], bool(r["anulados"])) for r in rows)
+    png = ranking_png_cached(linhas_img, len(JOGADOS), quando)
+    ci1, ci2 = st.columns([3, 2])
+    ci1.image(png, width=460)
+    ci2.download_button("⬇️ Baixar imagem (PNG)", data=png,
+                        file_name="ranking_bolao_pct.png", mime="image/png")
+    ci2.caption("**No celular:** segure o dedo na imagem → **Compartilhar** → WhatsApp.  \n"
+                "Ou baixe o PNG e mande no grupo. A imagem sempre sai com o ranking atual.")
 
     st.subheader("Detalhe por palpiteiro")
     sel = st.selectbox("Palpiteiro", [r["nome"] for r in rows])
