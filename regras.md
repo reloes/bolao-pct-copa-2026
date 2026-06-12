@@ -8,11 +8,15 @@ Todo mundo manda os palpites da **Copa inteira no começo** (antes do primeiro j
 
 ## A – PRIMEIRA FASE (fase de grupos — 72 jogos)
 
-Para cada jogo, você palpita o placar:
+Para cada jogo, você palpita o placar. A pontuação soma **dois acertos independentes**:
 
-- Placar **exato** — **6 pontos**
-- **Vencedor ou empate** — **3 pontos**
-- **Gol exato** de um dos dois times — **+1 ponto** (soma ao acerto do vencedor/empate)
+- **Resultado** (vencedor ou empate) — **3 pontos**
+- **Gol exato de um dos dois times** (nº de gols, comparado **time a time**) — **+1 ponto** — vale **mesmo errando o resultado**
+- **Placar exato** — **6 pontos** (caso especial: cobre os dois acertos)
+
+> **Exemplo** (real Coreia 2x1 Tchéquia): palpite 2x1 → **6** · 2x0 → **4** (3 do resultado + 1 dos gols da Coreia) · 1x0 → **3** (só o resultado) · **1x1 → 1** (errou o resultado, mas cravou o gol da Tcheca) · 0x2 → **0**.
+>
+> *Esclarecimento da organização (12/jun/2026): o ponto do gol exato é **independente** do acerto do resultado — a redação herdada de 2022 ("soma ao acerto do vencedor/empate") dava margem a dúvida e foi reescrita. A mesma lógica vale para **todos os jogos da Copa** (no mata-mata, com os valores da tabela da Seção C).*
 
 ---
 
@@ -49,7 +53,7 @@ Eventual prorrogação conta como jogo normal (vale o placar **ao final da prorr
 | 14 | Disputa de 3º/4º | 20 | 10 | 6 |
 | 15 | Final | 30 | 16 | 8 |
 
-> O "gol de um time" soma ao acerto do vencedor/empate. Metade dos pontos se errou a posição dos times no grupo.
+> O "gol de um time" é **independente** do acerto do vencedor/empate (esclarecimento da organização, 12/jun/2026) — no confronto certo da fase certa, pontua mesmo errando o resultado. Metade dos pontos se errou a posição dos times no grupo.
 
 **Exemplo (mantido de 2022):** você colocou Brasil em 1º e Itália em 2º nos grupos, e eles se encontram nas quartas. Se o Brasil foi 2º e a Itália 1º, o acerto do placar vale **metade** dos pontos que valeria se estivessem no lado certo da tabela.
 

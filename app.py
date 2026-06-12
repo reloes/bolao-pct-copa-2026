@@ -205,17 +205,17 @@ elif pagina == "⚽ Jogos & Gabarito":
                "**Clique num jogo** para abrir os palpites de todos.")
     with st.expander("❓ Como funciona a pontuação de cada jogo"):
         st.markdown(
-            "**Fase de grupos (Seção A):** placar exato → **6 pts** · acertou vencedor/empate → "
-            "**3 pts**, com **+1** se cravou o nº de gols de um dos times (comparado **time a "
-            "time**) · errou o resultado → **0** (o +1 só existe somado aos 3 — acertar gols de "
-            "um time com o resultado errado não vale nada).\n\n"
-            "Exemplos com o real **México 2x0**: palpite 2x0 → **6** · 2x1 → **4** (3 + gols do "
-            "México) · 1x0 → **4** (3 + zero da África do Sul) · 3x1 → **3** · 0x0 → **0** · "
-            "0x2 → **0**.\n\n"
-            "**Mata-mata (Seção C):** os valores crescem por fase (6/3/1 nos 32-avos até "
-            "30/16/8 na final) e o palpite só pontua se o **confronto previsto = confronto "
-            "real** na mesma fase; vale **metade** se você acertou os times mas com posição de "
-            "grupo trocada. Prorrogação conta no placar; pênaltis não.")
+            "**Dois acertos independentes se somam** *(esclarecido pela organização em "
+            "12/jun/2026)*: **resultado** (vencedor/empate) → **3 pts** · **gol exato de um "
+            "dos times** (nº de gols, comparado **time a time**) → **+1 pt — vale mesmo "
+            "errando o resultado** · **placar exato** → **6 pts** (cobre tudo).\n\n"
+            "Exemplos com o real **Coreia 2x1 Tchéquia**: palpite 2x1 → **6** · 2x0 → **4** "
+            "(3 + gols da Coreia) · 1x0 → **3** (só o resultado) · **1x1 → 1** (errou o "
+            "resultado, mas cravou o gol da Tcheca) · 0x2 → **0**.\n\n"
+            "**Mata-mata (Seção C):** mesma lógica, com valores por fase (6/3/1 nos 32-avos "
+            "até 30/16/8 na final) — pontua apenas se o **confronto previsto = confronto "
+            "real** na mesma fase, e vale **metade** se a posição de grupo dos times estiver "
+            "trocada. Prorrogação conta no placar; pênaltis não.")
     rows = scoring.ranking(PALPS, REAL, RADV, PEN)
     perA = {r["nome"]: r["perA"] for r in rows}
     perCn = {r["nome"]: r["perCn"] for r in rows}

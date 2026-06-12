@@ -27,7 +27,10 @@ def _sign(d):
 
 def score_game_A(p, r):
     """Pontos da Seção A de UM jogo de grupo. p, r = (g1, g2) ou None (não preenchido/ inválido).
-    Exato=6; vencedor/empate=3; +1 se acertou o nº de gols exato de um dos times."""
+    Exato=6; senão somam-se DOIS acertos INDEPENDENTES: resultado (vencedor/empate)=3 e
+    gol exato de um dos times (comparado time a time)=+1 — o +1 vale MESMO errando o
+    resultado. (Esclarecimento da organização 12/jun/2026: a redação herdada de 2022,
+    "soma ao acerto do vencedor", era ambígua; vale a leitura independente.)"""
     if not p or not r:
         return 0
     p1, p2 = p
@@ -36,9 +39,10 @@ def score_game_A(p, r):
         return 0
     if p1 == r1 and p2 == r2:
         return 6
-    if _sign(p1 - p2) == _sign(r1 - r2):                 # acertou vencedor/empate
-        return 3 + (1 if (p1 == r1 or p2 == r2) else 0)  # +1 se um placar exato
-    return 0
+    pts = 3 if _sign(p1 - p2) == _sign(r1 - r2) else 0   # resultado (vencedor/empate)
+    if p1 == r1 or p2 == r2:                             # gol exato de um dos times (independente)
+        pts += 1
+    return pts
 
 
 def section_A(palpite, real):
@@ -173,10 +177,9 @@ def section_C(palpite, real):
         pA, pB = (pg1, pg2) if same else (pg2, pg1)            # gols do palpite alinhados à orientação real
         if pA == rg1 and pB == rg2:
             base = EX
-        elif _sign(pA - pB) == _sign(rg1 - rg2):
-            base = VE + (GOL if (pA == rg1 or pB == rg2) else 0)
-        else:
-            base = 0
+        else:                                            # VE e GOL independentes (organização, 12/jun/2026)
+            base = ((VE if _sign(pA - pB) == _sign(rg1 - rg2) else 0)
+                    + (GOL if (pA == rg1 or pB == rg2) else 0))
         pos_ok = (pd["pos"].get(rT[0]) == rd["pos"].get(rT[0])
                   and pd["pos"].get(rT[1]) == rd["pos"].get(rT[1]))
         per[_DEGRAU_C[num]] += base if pos_ok else base / 2

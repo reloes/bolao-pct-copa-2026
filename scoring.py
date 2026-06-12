@@ -128,10 +128,9 @@ def section_C(pd, rd, palpite, real):
         pA, pB = (pg1, pg2) if same else (pg2, pg1)
         if pA == rg1 and pB == rg2:
             base = EX
-        elif se._sign(pA - pB) == se._sign(rg1 - rg2):
-            base = VE + (GOL if (pA == rg1 or pB == rg2) else 0)
-        else:
-            base = 0
+        else:                                            # VE e GOL independentes (organização, 12/jun/2026)
+            base = ((VE if se._sign(pA - pB) == se._sign(rg1 - rg2) else 0)
+                    + (GOL if (pA == rg1 or pB == rg2) else 0))
         pos_ok = (pd["pos"].get(rT[0]) == rd["pos"].get(rT[0])
                   and pd["pos"].get(rT[1]) == rd["pos"].get(rT[1]))
         per[se._DEGRAU_C[num]] += base if pos_ok else base / 2

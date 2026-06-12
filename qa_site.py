@@ -37,6 +37,22 @@ DECISIVOS = [p["nome"] for p in PALPS if not any(p["scores"][n][0] == p["scores"
 print(f"Palpiteiros: {[p['nome'] for p in PALPS]}")
 print(f"Sem empates no mata-mata (usáveis na paridade × oráculo): {DECISIVOS}")
 
+# ---------- 0) Regra do gol-exato INDEPENDENTE do resultado (organização, 12/jun/2026)
+print("\n0) Regra do +1 independente (Seções A e C):")
+for p_, r_, exp in [((1, 1), (2, 1), 1),   # errou o resultado, cravou o gol da Tcheca → 1 (caso do grupo)
+                    ((2, 0), (2, 1), 4), ((3, 1), (2, 1), 4), ((1, 0), (2, 1), 3),
+                    ((2, 5), (2, 1), 1),   # errou o resultado, cravou os 2 da Coreia → 1
+                    ((0, 0), (2, 1), 0), ((0, 0), (1, 1), 3), ((2, 1), (2, 1), 6)]:
+    got = se.score_game_A(p_, r_)
+    check(f"Seção A: palpite {p_[0]}x{p_[1]} × real {r_[0]}x{r_[1]} → {exp}", got == exp, str(got))
+_sint = {n: (2, 1) for n in range(1, 105)}
+_rd0 = scoring.derive_full_adv(_sint, {})
+_psc = dict(_sint); _psc[104] = (1, 1)
+_pd0 = scoring.derive_full_adv(_psc, {104: _rd0["teams"][104][0]})
+_, _, _pern = scoring.section_C(_pd0, _rd0, _psc, _sint)
+check("Seção C: final real 2x1 × palpite 1x1 → 8 (gol independente, fase F)",
+      _pern.get(104) == 8, str(_pern.get(104)))
+
 # ---------- 1) PARIDADE × score_engine (cenários decisivos)
 print("\n1) Paridade site × oráculo (A/B/C/D) em cenários decisivos:")
 sint = {n: (2, 1) for n in range(1, 105)}
