@@ -94,6 +94,12 @@ if pagina == "🏅 Ranking":
                    f"— deixou de marcar **{r['descontado']:g} pt(s)** até agora.")
 
     # --- exportar pro WhatsApp (pedido do grupo) ---
+    # na URL do wa.me NÃO usar emoji: o link_button do Streamlit mangla p/ U+FFFD (�)
+    zap_url = ("BOLÃO PCT — Copa 2026\n"
+               f"Ranking após {len(JOGADOS)}/104 jogos:\n"
+               + "\n".join(f"{r['pos']}º {r['nome']}{' (J1 anulado)' if r['anulados'] else ''}"
+                           f" — {r['total']:g}" for r in rows)
+               + "\nhttps://bolao-pct-copa-2026.streamlit.app")
     medal_txt = {1: "🥇", 2: "🥈", 3: "🥉"}
     zap = ("🏆 BOLÃO PCT — Copa 2026\n"
            f"📊 Ranking após {len(JOGADOS)}/104 jogos:\n"
@@ -101,8 +107,8 @@ if pagina == "🏅 Ranking":
                        f"{' ⚠️' if r['anulados'] else ''} — {r['total']:g}" for r in rows)
            + "\n🔗 https://bolao-pct-copa-2026.streamlit.app")
     cz1, cz2 = st.columns([1, 2])
-    cz1.link_button("📲 Compartilhar no WhatsApp", "https://wa.me/?text=" + urllib.parse.quote(zap))
-    with cz2.expander("ver/copiar o texto da mensagem"):
+    cz1.link_button("📲 Compartilhar no WhatsApp", "https://wa.me/?text=" + urllib.parse.quote(zap_url))
+    with cz2.expander("ver/copiar o texto da mensagem (com emojis — cole no zap)"):
         st.code(zap, language=None)
 
     st.subheader("Detalhe por palpiteiro")
