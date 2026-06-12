@@ -7,6 +7,7 @@ Palpites: congelados em palpites.json (imutáveis — auditoria por SHA-256 na p
 Gabarito: Google Sheet do organizador (CSV publicado em st.secrets["GABARITO_CSV_URL"])
 ou gabarito_local.json. Rode local: streamlit run app.py --server.port 8503
 """
+import urllib.parse
 import streamlit as st
 import pandas as pd
 import fixture_copa_2026 as fx
@@ -92,6 +93,18 @@ if pagina == "🏅 Ranking":
                    f"anulado(s) na Seção A ({info.get('motivo', '')}) "
                    f"— deixou de marcar **{r['descontado']:g} pt(s)** até agora.")
 
+    # --- exportar pro WhatsApp (pedido do grupo) ---
+    medal_txt = {1: "🥇", 2: "🥈", 3: "🥉"}
+    zap = ("🏆 BOLÃO PCT — Copa 2026\n"
+           f"📊 Ranking após {len(JOGADOS)}/104 jogos:\n"
+           + "\n".join(f"{medal_txt.get(r['pos'], str(r['pos']) + 'º')} {r['nome']}"
+                       f"{' ⚠️' if r['anulados'] else ''} — {r['total']:g}" for r in rows)
+           + "\n🔗 https://bolao-pct-copa-2026.streamlit.app")
+    cz1, cz2 = st.columns([1, 2])
+    cz1.link_button("📲 Compartilhar no WhatsApp", "https://wa.me/?text=" + urllib.parse.quote(zap))
+    with cz2.expander("ver/copiar o texto da mensagem"):
+        st.code(zap, language=None)
+
     st.subheader("Detalhe por palpiteiro")
     sel = st.selectbox("Palpiteiro", [r["nome"] for r in rows])
     r = next(x for x in rows if x["nome"] == sel)
@@ -140,21 +153,34 @@ elif pagina == "📋 Palpites":
                 f"{', '.join('J'+str(n) for n in p['sem_escolha'])} — o ramo correspondente do "
                 f"bracket dele ficou indefinido (vale como entregue).")
 
-    t_grupos, t_mata = st.tabs(["Fase de grupos", "Mata-mata"])
+    t_grupos, t_mata, t_comp = st.tabs(["Fase de grupos", "Mata-mata", "Comparativo dos grupos"])
     with t_grupos:
-        cols = st.columns(3)
-        for i, L in enumerate("ABCDEFGHIJKL"):
-            with cols[i % 3]:
-                st.markdown(f"**Grupo {L}**")
-                linhas = []
-                for num, _, _, t1, t2, _ in fx.GROUP_MATCHES:
-                    if {t1, t2} <= set(fx.GROUPS[L]):
-                        g1, g2 = p["scores"][num]
-                        linhas.append(f"{tn(t1)} **{g1} x {g2}** {tn(t2)}")
-                ordem = pdv["standings"][L]
-                linhas.append("→ " + " · ".join(f"{j+1}º {tn(t)}" for j, t in enumerate(ordem)))
-                st.markdown("  \n".join(linhas))
-                st.divider()
+        for row0 in range(0, 12, 3):                      # fileiras A-B-C / D-E-F / ... (ordem de leitura)
+            cols = st.columns(3)
+            for j, L in enumerate("ABCDEFGHIJKL"[row0:row0 + 3]):
+                with cols[j]:
+                    st.markdown(f"**Grupo {L}**")
+                    linhas = []
+                    for num, _, _, t1, t2, _ in fx.GROUP_MATCHES:
+                        if {t1, t2} <= set(fx.GROUPS[L]):
+                            g1, g2 = p["scores"][num]
+                            linhas.append(f"{tn(t1)} **{g1} x {g2}** {tn(t2)}")
+                    ordem = pdv["standings"][L]
+                    linhas.append("→ " + " · ".join(f"{j2+1}º {tn(t)}" for j2, t in enumerate(ordem)))
+                    st.markdown("  \n".join(linhas))
+                    st.divider()
+    with t_comp:
+        st.caption("A classificação prevista por cada palpiteiro, grupo a grupo, lado a lado "
+                   "(o 3º é quem disputa a repescagem dos 8 melhores terceiros).")
+        all_stand = {q["nome"]: scoring.derive_full_adv(q["scores"], q["advancers"])["standings"]
+                     for q in PALPS}
+        tabs_g = st.tabs([f"Grupo {L}" for L in "ABCDEFGHIJKL"])
+        for L, tg in zip("ABCDEFGHIJKL", tabs_g):
+            with tg:
+                df_c = pd.DataFrame([{"Palpiteiro": nome,
+                                      **{f"{i+1}º": tn(stand[L][i]) for i in range(4)}}
+                                     for nome, stand in all_stand.items()])
+                st.dataframe(df_c, width="stretch", hide_index=True)
     with t_mata:
         for fase_key in ("R32", "R16", "QF", "SF", "3P", "F"):
             nums = [n for n, (f_, *_), in KO_INFO.items() if f_ == fase_key]
@@ -175,34 +201,80 @@ elif pagina == "📋 Palpites":
 # ============================================================ ⚽ JOGOS & GABARITO
 elif pagina == "⚽ Jogos & Gabarito":
     st.title("⚽ Jogos & gabarito oficial")
-    st.caption(f"Fonte do gabarito: **{FONTE}** — só o organizador lança resultados "
-               "(na Google Sheet ou no gabarito_local.json).")
+    st.caption(f"Fonte do gabarito: **{FONTE}** — só o organizador lança resultados. "
+               "**Clique num jogo** para abrir os palpites de todos.")
+    with st.expander("❓ Como funciona a pontuação de cada jogo"):
+        st.markdown(
+            "**Fase de grupos (Seção A):** placar exato → **6 pts** · acertou vencedor/empate → "
+            "**3 pts**, com **+1** se cravou o nº de gols de um dos times (comparado **time a "
+            "time**) · errou o resultado → **0** (o +1 só existe somado aos 3 — acertar gols de "
+            "um time com o resultado errado não vale nada).\n\n"
+            "Exemplos com o real **México 2x0**: palpite 2x0 → **6** · 2x1 → **4** (3 + gols do "
+            "México) · 1x0 → **4** (3 + zero da África do Sul) · 3x1 → **3** · 0x0 → **0** · "
+            "0x2 → **0**.\n\n"
+            "**Mata-mata (Seção C):** os valores crescem por fase (6/3/1 nos 32-avos até "
+            "30/16/8 na final) e o palpite só pontua se o **confronto previsto = confronto "
+            "real** na mesma fase; vale **metade** se você acertou os times mas com posição de "
+            "grupo trocada. Prorrogação conta no placar; pênaltis não.")
+    rows = scoring.ranking(PALPS, REAL, RADV, PEN)
+    perA = {r["nome"]: r["perA"] for r in rows}
+    perCn = {r["nome"]: r["perCn"] for r in rows}
+    anul = {r["nome"]: r["anulados"] for r in rows}
+    pdvs = {q["nome"]: scoring.derive_full_adv(q["scores"], q["advancers"]) for q in PALPS}
     rd = scoring.derive_full_adv(REAL, RADV)
 
     st.subheader("Fase de grupos")
-    gj = []
+    cur_date = None
     for num, d_, t1, t2 in [(n, *GROUP_INFO[n]) for n in sorted(GROUP_INFO)]:
+        if d_ != cur_date:
+            cur_date = d_
+            st.markdown(f"#### 📅 {d_}")
         r = REAL.get(num)
-        gj.append({"Jogo": f"J{num}", "Data": d_,
-                   "Partida": f"{tn(t1)} x {tn(t2)}",
-                   "Placar": f"{r[0]} x {r[1]}" if r else "—"})
-    st.dataframe(pd.DataFrame(gj), width="stretch", hide_index=True, height=420)
+        placar = f"{r[0]} x {r[1]}" if r else "—"
+        with st.expander(f"J{num} · {FLAG.get(t1, '')} {PT[t1]}  {placar}  {PT[t2]} {FLAG.get(t2, '')}"):
+            linhas = []
+            for q in PALPS:
+                g1, g2 = q["scores"][num]
+                if r:
+                    pts = "0 (anulado)" if num in anul[q["nome"]] else f"{perA[q['nome']][num]:g}"
+                else:
+                    pts = "—"
+                linhas.append({"Palpiteiro": q["nome"], "Palpite": f"{g1} x {g2}", "Pontos": pts})
+            st.dataframe(pd.DataFrame(linhas), width="stretch", hide_index=True)
 
     st.subheader("Mata-mata")
     if rd is None:
-        st.info("Os confrontos reais dos 32-avos aparecem quando a fase de grupos terminar "
-                "(os palpites de mata-mata de cada um já estão travados desde a largada).")
-    else:
-        for fase_key in ("R32", "R16", "QF", "SF", "3P", "F"):
-            nums = sorted(n for n, (f_, *_), in KO_INFO.items() if f_ == fase_key)
-            st.markdown(f"**{FASE_PT[fase_key]}**")
-            for num in nums:
-                a, b = rd["teams"][num]
-                r = REAL.get(num)
-                placar = f"**{r[0]} x {r[1]}**" if r else "—"
-                adv = RADV.get(num)
-                pen_txt = f" · pênaltis: {tn(adv)}" if (r and r[0] == r[1]) else ""
-                st.markdown(f"J{num}: {tn(a)} {placar} {tn(b)}{pen_txt}")
+        st.info("Os confrontos REAIS aparecem quando a fase de grupos terminar — mas o palpite "
+                "de cada um já está travado: abra um jogo para ver o confronto que cada um previu.")
+    cur_date = None
+    for num in sorted(KO_INFO):
+        fase_k, d_, s1, s2 = KO_INFO[num]
+        if d_ != cur_date:
+            cur_date = d_
+            st.markdown(f"#### 📅 {d_}")
+        r = REAL.get(num)
+        placar = f"{r[0]} x {r[1]}" if r else "—"
+        if rd:
+            a, b = rd["teams"][num]
+            confronto = f"{FLAG.get(a, '')} {PT.get(a, '?')}  {placar}  {PT.get(b, '?')} {FLAG.get(b, '')}"
+        else:
+            confronto = f"{s1} x {s2}"
+        pen_real = f" · pênaltis: {tn(RADV.get(num))}" if (r and r[0] == r[1]) else ""
+        with st.expander(f"J{num} · {FASE_PT[fase_k]} · {confronto}{pen_real}"):
+            linhas = []
+            for q in PALPS:
+                qa_, qb_ = pdvs[q["nome"]]["teams"][num]
+                g1, g2 = q["scores"][num]
+                pen_txt = ""
+                if g1 == g2:
+                    adv = q["advancers"].get(num)
+                    pen_txt = f" (pênaltis: {PT.get(adv, '—')})" if adv else ""
+                pts = perCn[q["nome"]].get(num, "—") if r else "—"
+                pts = f"{pts:g}" if isinstance(pts, (int, float)) else pts
+                linhas.append({"Palpiteiro": q["nome"],
+                               "Confronto previsto": f"{tn(qa_)} {g1} x {g2} {tn(qb_)}{pen_txt}",
+                               "Pontos": pts})
+            st.dataframe(pd.DataFrame(linhas), width="stretch", hide_index=True)
 
 
 # ============================================================ 🎮 SIMULADOR

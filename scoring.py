@@ -106,9 +106,11 @@ def section_B(pd, rd, real_groups_complete):
 
 
 def section_C(pd, rd, palpite, real):
+    """(total, {degrau: pts}, {jogo: pts}) — o per-jogo alimenta o expander 'palpites por jogo'."""
     per = {d: 0 for d in range(10, 16)}
+    per_num = {}
     if not pd or not rd:
-        return 0, per
+        return 0, per, per_num
     for num in range(73, 105):
         EX, VE, GOL = se.SCORE_C[num]
         pT, rT = pd["teams"][num], rd["teams"][num]
@@ -133,7 +135,8 @@ def section_C(pd, rd, palpite, real):
         pos_ok = (pd["pos"].get(rT[0]) == rd["pos"].get(rT[0])
                   and pd["pos"].get(rT[1]) == rd["pos"].get(rT[1]))
         per[se._DEGRAU_C[num]] += base if pos_ok else base / 2
-    return sum(per.values()), per
+        per_num[num] = base if pos_ok else base / 2
+    return sum(per.values()), per, per_num
 
 
 def section_D(pd, rd, palpite, real):
@@ -180,11 +183,11 @@ def avaliar(palp, real_scores, real_advancers, penalidades):
     rgc = se._group_complete(real_scores)
     A, perA, desc = section_A(palp["scores"], real_scores, anulados)
     B, perB = section_B(pd, rd, rgc)
-    C, perC = section_C(pd, rd, palp["scores"], real_scores)
+    C, perC, perCn = section_C(pd, rd, palp["scores"], real_scores)
     Dkey, crit = section_D(pd, rd, palp["scores"], real_scores)
     return {"nome": palp["nome"], "A": A, "B": B, "C": C, "total": A + B + C,
             "dkey": Dkey, "crit": crit, "perA": perA, "perB": perB, "perC": perC,
-            "anulados": anulados, "descontado": desc, "pd": pd}
+            "perCn": perCn, "anulados": anulados, "descontado": desc, "pd": pd}
 
 
 def ranking(palps, real_scores, real_advancers, penalidades):
