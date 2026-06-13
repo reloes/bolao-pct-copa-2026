@@ -43,14 +43,18 @@ def tn(team):
     return f"{FLAG.get(team, '')} {PT[team]}".strip() if team else "—"
 
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=600)   # 10 min; o botão "Atualizar resultados" força a busca na hora
 def carregar():
     meta, palps = D.load_palpites()
     try:
         url = st.secrets["GABARITO_CSV_URL"]
     except Exception:
         url = None
-    real, radv, fonte = D.load_gabarito(url)
+    try:
+        token = st.secrets["FOOTBALL_DATA_API_KEY"]
+    except Exception:
+        token = None
+    real, radv, fonte = D.load_gabarito(url, token)
     return meta, palps, real, radv, fonte
 
 

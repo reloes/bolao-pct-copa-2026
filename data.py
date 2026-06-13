@@ -2,9 +2,11 @@
 """
 Carga de dados do site:
 - palpites.json (gerado por build_site_data.py — congelado; chaves → int aqui);
-- gabarito real: 1º a URL CSV publicada da Google Sheet do organizador (st.secrets
-  ["GABARITO_CSV_URL"], cache 60s — SÓ o Renato edita a Sheet = autenticação via Google);
-  fallback: gabarito_local.json (modo local / antes de publicar a Sheet).
+- gabarito real: MERGE por prioridade (maior vence) —
+    Sheet do organizador (override manual, st.secrets["GABARITO_CSV_URL"])
+    > API football-data.org (automático, st.secrets["FOOTBALL_DATA_API_KEY"], via fonte_api)
+    > gabarito_local.json (fallback de emergência).
+  O botão "Atualizar resultados" do app limpa o cache e força nova busca da API.
 
 Formato CSV esperado (ver gabarito_template.csv): colunas jogo, gols1, gols2, quem_passa
 (quem_passa só em empate de mata-mata; nome do time em PT ou EN).
@@ -78,25 +80,49 @@ def _parse_rows(rows):
     return scores, advancers
 
 
-def load_gabarito(csv_url=None):
-    """(scores, advancers, fonte). Tenta a URL CSV publicada; senão, o JSON local."""
-    if csv_url:
-        try:
-            with urllib.request.urlopen(csv_url, timeout=10) as resp:
-                text = resp.read().decode("utf-8")
-            rows = list(csv.DictReader(io.StringIO(text)))
-            scores, advancers = _parse_rows(rows)
-            return scores, advancers, "Google Sheet do organizador (CSV publicado)"
-        except Exception as e:                       # rede/URL fora → cai no local
-            err = f" (falha na Sheet: {e})"
-    else:
-        err = ""
+def _load_local():
+    """gabarito_local.json (fallback de emergência)."""
     path = os.path.join(HERE, "gabarito_local.json")
-    if os.path.exists(path):
-        raw = json.load(open(path, encoding="utf-8"))
-        scores = {int(n): tuple(v) for n, v in (raw.get("jogos") or {}).items()
-                  if v and v[0] is not None and v[1] is not None}
-        advancers = {int(n): _team_en(t) for n, t in (raw.get("quem_passa") or {}).items()}
-        advancers = {n: t for n, t in advancers.items() if t}
-        return scores, advancers, "gabarito_local.json" + err
-    return {}, {}, "vazio" + err
+    if not os.path.exists(path):
+        return {}, {}
+    raw = json.load(open(path, encoding="utf-8"))
+    scores = {int(n): tuple(v) for n, v in (raw.get("jogos") or {}).items()
+              if v and v[0] is not None and v[1] is not None}
+    advancers = {int(n): _team_en(t) for n, t in (raw.get("quem_passa") or {}).items()}
+    return scores, {n: t for n, t in advancers.items() if t}
+
+
+def _load_sheet(csv_url):
+    """Google Sheet do organizador (CSV publicado) → (scores, advancers)."""
+    with urllib.request.urlopen(csv_url, timeout=10) as resp:
+        text = resp.read().decode("utf-8")
+    return _parse_rows(list(csv.DictReader(io.StringIO(text))))
+
+
+def load_gabarito(csv_url=None, api_token=None):
+    """(scores, advancers, fonte) com MERGE por prioridade (maior vence):
+    Sheet do organizador (override manual) > API football-data.org (automático) >
+    gabarito_local.json (fallback). Cada camada sobrescreve a anterior POR JOGO."""
+    fontes = []
+    scores, advancers = _load_local()                       # base/fallback
+    if scores:
+        fontes.append(f"local ({len(scores)})")
+    if api_token:                                           # automático (football-data.org)
+        try:
+            import fonte_api
+            a_s, a_a, n = fonte_api.load_api_gabarito(api_token)
+            scores.update(a_s)
+            advancers.update(a_a)
+            fontes.append(f"API football-data.org ({n} jogos)")
+        except Exception:
+            fontes.append("API indisponível")
+    if csv_url:                                             # override do organizador (vence)
+        try:
+            s_s, s_a = _load_sheet(csv_url)
+            scores.update(s_s)
+            advancers.update(s_a)
+            if s_s or s_a:
+                fontes.append(f"Sheet override ({len(s_s)})")
+        except Exception:
+            fontes.append("Sheet indisponível")
+    return scores, advancers, " + ".join(fontes) if fontes else "vazio"
