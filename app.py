@@ -93,19 +93,17 @@ if pagina == "🏅 Ranking":
                    f"anulado(s) na Seção A ({info.get('motivo', '')}) "
                    f"— deixou de marcar **{r['descontado']:g} pt(s)** até agora.")
 
-    # --- exportar pro WhatsApp (pedido do grupo) ---
+    # --- exportar pro WhatsApp (pedido do grupo; SEM o link do site na msg) ---
     # na URL do wa.me NÃO usar emoji: o link_button do Streamlit mangla p/ U+FFFD (�)
     zap_url = ("BOLÃO PCT — Copa 2026\n"
                f"Ranking após {len(JOGADOS)}/104 jogos:\n"
                + "\n".join(f"{r['pos']}º {r['nome']}{' (J1 anulado)' if r['anulados'] else ''}"
-                           f" — {r['total']:g}" for r in rows)
-               + "\nhttps://bolao-pct-copa-2026.streamlit.app")
+                           f" — {r['total']:g}" for r in rows))
     medal_txt = {1: "🥇", 2: "🥈", 3: "🥉"}
     zap = ("🏆 BOLÃO PCT — Copa 2026\n"
            f"📊 Ranking após {len(JOGADOS)}/104 jogos:\n"
            + "\n".join(f"{medal_txt.get(r['pos'], str(r['pos']) + 'º')} {r['nome']}"
-                       f"{' ⚠️' if r['anulados'] else ''} — {r['total']:g}" for r in rows)
-           + "\n🔗 https://bolao-pct-copa-2026.streamlit.app")
+                       f"{' ⚠️' if r['anulados'] else ''} — {r['total']:g}" for r in rows))
     cz1, cz2 = st.columns([1, 2])
     cz1.link_button("📲 Compartilhar no WhatsApp", "https://wa.me/?text=" + urllib.parse.quote(zap_url))
     with cz2.expander("ver/copiar o texto da mensagem (com emojis — cole no zap)"):
@@ -229,58 +227,91 @@ elif pagina == "⚽ Jogos & Gabarito":
     pdvs = {q["nome"]: scoring.derive_full_adv(q["scores"], q["advancers"]) for q in PALPS}
     rd = scoring.derive_full_adv(REAL, RADV)
 
-    st.subheader("Fase de grupos")
-    cur_date = None
-    for num, d_, t1, t2 in [(n, *GROUP_INFO[n]) for n in sorted(GROUP_INFO)]:
-        if d_ != cur_date:
-            cur_date = d_
-            st.markdown(f"#### 📅 {d_}")
-        r = REAL.get(num)
-        placar = f"{r[0]} x {r[1]}" if r else "—"
-        with st.expander(f"J{num} · {FLAG.get(t1, '')} {PT[t1]}  {placar}  {PT[t2]} {FLAG.get(t2, '')}"):
-            linhas = []
+    # texto do WhatsApp com os jogos+palpites de um dia (só jogos + palpites; sem link do site)
+    def _zap_grupos(nums_dia, dia):
+        out = [f"BOLÃO PCT — palpites de {dia}", ""]
+        for num in nums_dia:
+            _, t1, t2 = GROUP_INFO[num]
+            out.append(f"J{num} {PT[t1]} x {PT[t2]}")
+            out.append(" · ".join(f"{q['nome']} {q['scores'][num][0]}x{q['scores'][num][1]}"
+                                  for q in PALPS))
+            out.append("")
+        return "\n".join(out).strip()
+
+    def _zap_mata(nums_dia, dia):
+        out = [f"BOLÃO PCT — palpites de {dia}", ""]
+        for num in nums_dia:
+            out.append(f"J{num} {FASE_PT[KO_INFO[num][0]]}")
             for q in PALPS:
+                qa_, qb_ = pdvs[q["nome"]]["teams"][num]
                 g1, g2 = q["scores"][num]
-                if r:
-                    pts = "0 (anulado)" if num in anul[q["nome"]] else f"{perA[q['nome']][num]:g}"
-                else:
-                    pts = "—"
-                linhas.append({"Palpiteiro": q["nome"], "Palpite": f"{g1} x {g2}", "Pontos": pts})
-            st.dataframe(pd.DataFrame(linhas), width="stretch", hide_index=True)
+                pen = (f" (pen {PT.get(q['advancers'].get(num), '')})"
+                       if g1 == g2 and q["advancers"].get(num) else "")
+                out.append(f"{q['nome']}: {PT.get(qa_, '?')} {g1}x{g2} {PT.get(qb_, '?')}{pen}")
+            out.append("")
+        return "\n".join(out).strip()
+
+    def _botao_zap_dia(texto, dia):
+        st.link_button(f"📲 Compartilhar palpites de {dia} no WhatsApp",
+                       "https://wa.me/?text=" + urllib.parse.quote(texto))
+
+    st.subheader("Fase de grupos")
+    dias_g = {}
+    for num in sorted(GROUP_INFO):
+        dias_g.setdefault(GROUP_INFO[num][0], []).append(num)
+    for dia, nums_dia in dias_g.items():
+        st.markdown(f"#### 📅 {dia}")
+        for num in nums_dia:
+            _, t1, t2 = GROUP_INFO[num]
+            r = REAL.get(num)
+            placar = f"{r[0]} x {r[1]}" if r else "—"
+            with st.expander(f"J{num} · {FLAG.get(t1, '')} {PT[t1]}  {placar}  {PT[t2]} {FLAG.get(t2, '')}"):
+                linhas = []
+                for q in PALPS:
+                    g1, g2 = q["scores"][num]
+                    if r:
+                        pts = "0 (anulado)" if num in anul[q["nome"]] else f"{perA[q['nome']][num]:g}"
+                    else:
+                        pts = "—"
+                    linhas.append({"Palpiteiro": q["nome"], "Palpite": f"{g1} x {g2}", "Pontos": pts})
+                st.dataframe(pd.DataFrame(linhas), width="stretch", hide_index=True)
+        _botao_zap_dia(_zap_grupos(nums_dia, dia), dia)
 
     st.subheader("Mata-mata")
     if rd is None:
         st.info("Os confrontos REAIS aparecem quando a fase de grupos terminar — mas o palpite "
                 "de cada um já está travado: abra um jogo para ver o confronto que cada um previu.")
-    cur_date = None
+    dias_k = {}
     for num in sorted(KO_INFO):
-        fase_k, d_, s1, s2 = KO_INFO[num]
-        if d_ != cur_date:
-            cur_date = d_
-            st.markdown(f"#### 📅 {d_}")
-        r = REAL.get(num)
-        placar = f"{r[0]} x {r[1]}" if r else "—"
-        if rd:
-            a, b = rd["teams"][num]
-            confronto = f"{FLAG.get(a, '')} {PT.get(a, '?')}  {placar}  {PT.get(b, '?')} {FLAG.get(b, '')}"
-        else:
-            confronto = f"{s1} x {s2}"
-        pen_real = f" · pênaltis: {tn(RADV.get(num))}" if (r and r[0] == r[1]) else ""
-        with st.expander(f"J{num} · {FASE_PT[fase_k]} · {confronto}{pen_real}"):
-            linhas = []
-            for q in PALPS:
-                qa_, qb_ = pdvs[q["nome"]]["teams"][num]
-                g1, g2 = q["scores"][num]
-                pen_txt = ""
-                if g1 == g2:
-                    adv = q["advancers"].get(num)
-                    pen_txt = f" (pênaltis: {PT.get(adv, '—')})" if adv else ""
-                pts = perCn[q["nome"]].get(num, "—") if r else "—"
-                pts = f"{pts:g}" if isinstance(pts, (int, float)) else pts
-                linhas.append({"Palpiteiro": q["nome"],
-                               "Confronto previsto": f"{tn(qa_)} {g1} x {g2} {tn(qb_)}{pen_txt}",
-                               "Pontos": pts})
-            st.dataframe(pd.DataFrame(linhas), width="stretch", hide_index=True)
+        dias_k.setdefault(KO_INFO[num][1], []).append(num)
+    for dia, nums_dia in dias_k.items():
+        st.markdown(f"#### 📅 {dia}")
+        for num in nums_dia:
+            fase_k, _, s1, s2 = KO_INFO[num]
+            r = REAL.get(num)
+            placar = f"{r[0]} x {r[1]}" if r else "—"
+            if rd:
+                a, b = rd["teams"][num]
+                confronto = f"{FLAG.get(a, '')} {PT.get(a, '?')}  {placar}  {PT.get(b, '?')} {FLAG.get(b, '')}"
+            else:
+                confronto = f"{s1} x {s2}"
+            pen_real = f" · pênaltis: {tn(RADV.get(num))}" if (r and r[0] == r[1]) else ""
+            with st.expander(f"J{num} · {FASE_PT[fase_k]} · {confronto}{pen_real}"):
+                linhas = []
+                for q in PALPS:
+                    qa_, qb_ = pdvs[q["nome"]]["teams"][num]
+                    g1, g2 = q["scores"][num]
+                    pen_txt = ""
+                    if g1 == g2:
+                        adv = q["advancers"].get(num)
+                        pen_txt = f" (pênaltis: {PT.get(adv, '—')})" if adv else ""
+                    pts = perCn[q["nome"]].get(num, "—") if r else "—"
+                    pts = f"{pts:g}" if isinstance(pts, (int, float)) else pts
+                    linhas.append({"Palpiteiro": q["nome"],
+                                   "Confronto previsto": f"{tn(qa_)} {g1} x {g2} {tn(qb_)}{pen_txt}",
+                                   "Pontos": pts})
+                st.dataframe(pd.DataFrame(linhas), width="stretch", hide_index=True)
+        _botao_zap_dia(_zap_mata(nums_dia, dia), dia)
 
 
 # ============================================================ 🎮 SIMULADOR
