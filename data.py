@@ -20,6 +20,7 @@ import urllib.request
 import fixture_copa_2026 as fx
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+_REV = "gabarito-merge-api+sheet+local-v1"   # marca de revisão (força redeploy limpo no Streamlit)
 
 
 def _norm(s):
