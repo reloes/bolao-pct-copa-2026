@@ -138,6 +138,41 @@ rd73p = scoring.derive_full_adv(rsint, {73: b73})
 check("real empatado sem 'quem passa' → indefinido", rd73["win"][73] is None)
 check("real empatado COM 'quem passa' → avança o escolhido", rd73p["win"][73] == b73)
 
+# ---------- 6) Automação do mata-mata (fonte_api.parse_ko) com cenário simulado
+print("\n6) Automação do mata-mata (parse_ko × cenário simulado, entrega 2):")
+import fonte_api
+import fixture_copa_2026 as fx
+EN2TLA = fonte_api.EN_TO_TLA
+_b = byname["BUSNITO"]                                     # decisivo (sem empate no mata-mata)
+_g = {n: _b["scores"][n] for n in range(1, 73)}
+_full = scoring.derive_full_adv(_b["scores"], _b["advancers"])
+
+def _stage(n):
+    return ("LAST_32" if n <= 88 else "LAST_16" if n <= 96 else "QUARTER_FINALS" if n <= 100
+            else "SEMI_FINALS" if n <= 102 else "THIRD_PLACE" if n == 103 else "FINAL")
+
+def _mk(h, a, gh, ga, stg, winner=None):
+    if winner is None:
+        winner = "HOME_TEAM" if gh > ga else "AWAY_TEAM" if ga > gh else None
+    return {"stage": stg, "status": "FINISHED", "homeTeam": {"tla": EN2TLA[h]},
+            "awayTeam": {"tla": EN2TLA[a]}, "score": {"winner": winner, "fullTime": {"home": gh, "away": ga}}}
+
+_ms = [_mk(t1, t2, *_g[num], "GROUP_STAGE") for num, _, _, t1, t2, _ in fx.GROUP_MATCHES]
+_ms += [_mk(_full["teams"][n][0], _full["teams"][n][1], *_b["scores"][n], _stage(n)) for n in range(73, 105)]
+_gp = fonte_api.parse_group_scores(_ms)
+_ko, _adv = fonte_api.parse_ko(_ms, _gp)
+check("grupos via API == cenário", _gp == _g)
+check("mata-mata via API: 32/32 casados sem divergência (casamento+orientação+propagação)",
+      len(_ko) == 32 and all(_ko.get(n) == _b["scores"][n] for n in range(73, 105)),
+      f"{len(_ko)}/32")
+_a104, _c104 = _full["teams"][104]                          # pênaltis: final empatada + winner = away
+_ms2 = [m for m in _ms if m["stage"] != "FINAL"] + [_mk(_a104, _c104, 1, 1, "FINAL", "AWAY_TEAM")]
+_ko2, _adv2 = fonte_api.parse_ko(_ms2, _gp)
+check("final empate 1x1 + pênaltis → placar (1,1) e advancer = quem a API marcou",
+      _ko2.get(104) == (1, 1) and _adv2.get(104) == _c104)
+check("mata-mata NÃO deriva sem os 72 grupos completos (gate)",
+      fonte_api.parse_ko(_ms, {1: (1, 0)}) == ({}, {}))
+
 print("\n" + ("✅ QA DO SITE PASSOU — pontuação fiel ao oráculo validado"
               if not fails else f"❌ QA FALHOU: {fails}"))
 sys.exit(0 if not fails else 1)
