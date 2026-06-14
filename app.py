@@ -121,12 +121,19 @@ if pagina == "🏅 Ranking":
     c2.metric("Seção A", f"{r['A']:g}")
     c3.metric("Seção B", f"{r['B']:g}")
     c4.metric("Seção C", f"{r['C']:g}")
-    ja = [(f"J{n}", f"{tn(GROUP_INFO[n][1])} {REAL[n][0]} x {REAL[n][1]} {tn(GROUP_INFO[n][2])}",
-           ("ANULADO" if n in r["anulados"] else f"{r['perA'][n]:g}"))
-          for n in JOGADOS if n <= 72]
+    psel = next((p for p in PALPS if p["nome"] == sel), None)
+    ja = []
+    for n in JOGADOS:
+        if n > 72:
+            continue
+        res = f"{tn(GROUP_INFO[n][1])} {REAL[n][0]} x {REAL[n][1]} {tn(GROUP_INFO[n][2])}"
+        pg = psel["scores"].get(n) if psel else None
+        ja.append((f"J{n}", res,
+                   f"{pg[0]} x {pg[1]}" if pg else "—",
+                   "ANULADO" if n in r["anulados"] else f"{r['perA'][n]:g}"))
     if ja:
         st.caption("Pontos por jogo já realizado (Seção A):")
-        st.dataframe(pd.DataFrame(ja, columns=["Jogo", "Resultado", "Pontos"]),
+        st.dataframe(pd.DataFrame(ja, columns=["Jogo", "Resultado", "Palpite", "Pontos"]),
                      width="stretch", hide_index=True)
     with st.expander("Critérios de desempate (Seção D, i–xiii)"):
         st.caption("Usados apenas em caso de empate no total — i é o mais importante.")
