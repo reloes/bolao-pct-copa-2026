@@ -59,7 +59,7 @@ def carregar():
 
 
 # --- interruptor liga/desliga (controlado pela Google Sheet; cache curto p/ refletir rápido) ---
-MANUTENCAO_PADRAO = "🛠️ Bolão PCT — em manutenção. Já já voltamos! 🏆"
+MANUTENCAO_PADRAO = "Bolão PCT fora do ar - reclamem com o Procura"
 
 
 @st.cache_data(ttl=30)
