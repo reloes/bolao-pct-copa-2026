@@ -58,6 +58,29 @@ def carregar():
     return meta, palps, real, radv, fonte
 
 
+# --- interruptor liga/desliga (controlado pela Google Sheet; cache curto p/ refletir rápido) ---
+MANUTENCAO_PADRAO = "🛠️ Bolão PCT — em manutenção. Já já voltamos! 🏆"
+
+
+@st.cache_data(ttl=30)
+def _site_status():
+    try:
+        url = st.secrets["GABARITO_CSV_URL"]
+    except Exception:
+        url = None
+    return D.load_status(url)
+
+
+_online, _msg = _site_status()
+if not _online:
+    st.markdown(
+        "<div style='text-align:center; padding-top:14vh'>"
+        "<div style='font-size:4.5rem'>🛠️</div>"
+        f"<h1 style='margin:0.2em 0'>{_msg or MANUTENCAO_PADRAO}</h1>"
+        "<p style='color:#888; font-size:1.1rem'>Bolão PCT — Copa 2026</p></div>",
+        unsafe_allow_html=True)
+    st.stop()
+
 meta, PALPS, REAL, RADV, FONTE = carregar()
 PEN = meta.get("penalidades", {})
 JOGADOS = sorted(REAL)

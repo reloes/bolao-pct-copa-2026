@@ -92,6 +92,29 @@ def load_palpites():
     return raw["_meta"], palps
 
 
+def load_status(csv_url):
+    """Interruptor liga/desliga do site, controlado pela MESMA Google Sheet do organizador.
+    Procura a linha de controle (coluna `jogo` = STATUS/SITE/ONLINE):
+      - `gols1` ∈ {0, off, nao, não, false, x, fora} → site FORA DO AR;
+      - vazio / 1 / on → no ar (default).
+      - `time1` dessa linha = mensagem de manutenção (opcional; senão usa o padrão do app).
+    Fail-open: sem a linha, ou se a Sheet não puder ser lida, o site fica NO AR (só uma
+    ação explícita na Sheet tira do ar). Retorna (online: bool, mensagem: str|None)."""
+    if not csv_url:
+        return True, None
+    try:
+        with urllib.request.urlopen(csv_url, timeout=10) as resp:
+            rows = list(csv.DictReader(io.StringIO(resp.read().decode("utf-8"))))
+    except Exception:
+        return True, None
+    for row in rows:
+        if str(row.get("jogo", "")).strip().lower() in ("status", "site", "online"):
+            flag = str(row.get("gols1", "")).strip().lower()
+            online = flag not in ("0", "off", "nao", "não", "false", "x", "fora", "offline")
+            return online, (row.get("time1") or "").strip() or None
+    return True, None
+
+
 def _parse_rows(rows):
     scores, advancers = {}, {}
     for row in rows:
