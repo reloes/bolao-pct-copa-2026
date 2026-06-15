@@ -21,7 +21,7 @@ import urllib.request
 import fixture_copa_2026 as fx
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-_REV = "gabarito-merge-api+sheet+local-v2-snapshot"   # marca de revisão (força redeploy limpo)
+_REV = "gabarito-merge-api+sheet+local-v3-status"   # marca de revisão (força redeploy/pull limpo)
 
 # Snapshot persistente do último gabarito bom da API. Resolve o bug do "jogo some": quando a
 # API falha (429 do rate-limit 10/min compartilhado, ou timeout), em vez de degradar para
