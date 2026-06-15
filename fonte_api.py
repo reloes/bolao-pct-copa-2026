@@ -11,6 +11,7 @@ ENTREGA 2 (~28/jun): mata-mata — placar ao fim da prorrogação + "quem passou
 pênaltis (a API tem `score.winner`/`score.penalties`), validado no 1º jogo real.
 """
 import json
+import time
 import urllib.request
 import fixture_copa_2026 as fx
 import bolao_engine as eng
@@ -46,11 +47,20 @@ KO_SLOTS = {num: (s1, s2) for num, _, _, _, s1, s2 in fx.KO_MATCHES}
 KO_STAGES = {"LAST_32", "LAST_16", "QUARTER_FINALS", "SEMI_FINALS", "THIRD_PLACE", "FINAL"}
 
 
-def fetch_matches(token):
-    """Baixa todos os jogos da Copa da API. Lança em erro de rede/HTTP."""
-    req = urllib.request.Request(WC_URL, headers={"X-Auth-Token": token})
-    with urllib.request.urlopen(req, timeout=12) as r:
-        return json.load(r).get("matches", [])
+def fetch_matches(token, retries=1):
+    """Baixa todos os jogos da Copa da API. 1 retry curto p/ erro transitório (rede/timeout);
+    lança se persistir (ex.: 429 de rate-limit) — o chamador trata caindo no snapshot."""
+    last = None
+    for i in range(retries + 1):
+        try:
+            req = urllib.request.Request(WC_URL, headers={"X-Auth-Token": token})
+            with urllib.request.urlopen(req, timeout=12) as r:
+                return json.load(r).get("matches", [])
+        except Exception as e:
+            last = e
+            if i < retries:
+                time.sleep(2)
+    raise last
 
 
 def parse_group_scores(matches):

@@ -15,12 +15,38 @@ import os
 import csv
 import json
 import io
+import tempfile
 import unicodedata
 import urllib.request
 import fixture_copa_2026 as fx
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-_REV = "gabarito-merge-api+sheet+local-v1"   # marca de revisão (força redeploy limpo no Streamlit)
+_REV = "gabarito-merge-api+sheet+local-v2-snapshot"   # marca de revisão (força redeploy limpo)
+
+# Snapshot persistente do último gabarito bom da API. Resolve o bug do "jogo some": quando a
+# API falha (429 do rate-limit 10/min compartilhado, ou timeout), em vez de degradar para
+# "quase nada" usamos o último resultado conhecido. Resultados de jogos terminados não mudam,
+# então ACUMULAR (união por jogo) é seguro e garante que o nº de jogos nunca regrida. Vive no
+# disco do container (efêmero entre reboots; re-popula na 1ª busca boa).
+_API_SNAP = os.path.join(tempfile.gettempdir(), "bolao_pct_api_snapshot.json")
+
+
+def _read_api_snap():
+    try:
+        raw = json.load(open(_API_SNAP, encoding="utf-8"))
+        return ({int(n): tuple(v) for n, v in raw.get("scores", {}).items()},
+                {int(n): t for n, t in raw.get("advancers", {}).items()})
+    except Exception:
+        return {}, {}
+
+
+def _write_api_snap(scores, advancers):
+    try:
+        json.dump({"scores": {str(n): list(v) for n, v in scores.items()},
+                   "advancers": {str(n): t for n, t in advancers.items()}},
+                  open(_API_SNAP, "w", encoding="utf-8"))
+    except Exception:
+        pass
 
 
 def _norm(s):
@@ -109,14 +135,21 @@ def load_gabarito(csv_url=None, api_token=None):
     if scores:
         fontes.append(f"local ({len(scores)})")
     if api_token:                                           # automático (football-data.org)
+        snap_s, snap_a = _read_api_snap()                  # último estado bom (acumulado)
         try:
             import fonte_api
-            a_s, a_a, n = fonte_api.load_api_gabarito(api_token)
-            scores.update(a_s)
-            advancers.update(a_a)
-            fontes.append(f"API football-data.org ({n} jogos)")
-        except Exception:
-            fontes.append("API indisponível")
+            a_s, a_a, _ = fonte_api.load_api_gabarito(api_token)
+            snap_s.update(a_s)                             # acumula: jogo já apurado nunca regride
+            snap_a.update(a_a)
+            _write_api_snap(snap_s, snap_a)
+            scores.update(snap_s)
+            advancers.update(snap_a)
+            fontes.append(f"API football-data.org ({len(snap_s)} jogos)")
+        except Exception:                                  # 429/timeout → usa o último snapshot bom
+            scores.update(snap_s)
+            advancers.update(snap_a)
+            fontes.append(f"API instável — usando cache ({len(snap_s)} jogos)"
+                          if snap_s else "API indisponível")
     if csv_url:                                             # override do organizador (vence)
         try:
             s_s, s_a = _load_sheet(csv_url)
