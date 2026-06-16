@@ -178,6 +178,45 @@ check("final empate 1x1 + pênaltis → placar (1,1) e advancer = quem a API mar
 check("mata-mata NÃO deriva sem os 72 grupos completos (gate)",
       fonte_api.parse_ko(_ms, {1: (1, 0)}) == ({}, {}))
 
+# ---------- 7) Imagem dos palpites do dia (imagem.py): cor 1-X-2 + intensidade por gols
+print("\n7) Imagem dos palpites do dia (imagem.py):")
+import imagem
+# matiz = coluna da aposta via sign(g1-g2) — casos do mockup de 16/jun
+check("2x1 → coluna 1 (vence a esquerda)", imagem.cor_palpite(2, 1)[1] == "1")
+check("1x1 → coluna X (empate)", imagem.cor_palpite(1, 1)[1] == "X")
+check("1x2 → coluna 2 (vence a direita)", imagem.cor_palpite(1, 2)[1] == "2")
+check("0x3 (todos cravaram a Noruega) → coluna 2", imagem.cor_palpite(0, 3)[1] == "2")
+_b1 = imagem.cor_palpite(2, 1)[0]; _g2 = imagem.cor_palpite(1, 2)[0]; _x = imagem.cor_palpite(1, 1)[0]
+check("coluna 1 puxa AZUL (B > R)", _b1[2] > _b1[0])
+check("coluna 2 puxa VERDE (G dominante)", _g2[1] > _g2[0] and _g2[1] > _g2[2])
+check("coluna X puxa VERMELHO (R dominante)", _x[0] > _x[1] and _x[0] > _x[2])
+# intensidade cresce com o total de gols (mesma coluna) e satura em 6
+
+
+def _forca(rgb):
+    return sum(255 - c for c in rgb)   # distância do branco = quão forte é o tom
+
+
+check("intensidade: 4x0 > 2x0 > 1x0 (mais gols, tom mais forte)",
+      _forca(imagem.cor_palpite(4, 0)[0]) > _forca(imagem.cor_palpite(2, 0)[0])
+      > _forca(imagem.cor_palpite(1, 0)[0]))
+check("intensidade satura em 6 gols (6x0 == 7x0)",
+      imagem.cor_palpite(6, 0)[0] == imagem.cor_palpite(7, 0)[0])
+# PNG válido e não-trivial p/ um dia de 4 e de 6 jogos
+_jg = lambda n: [(100 + i, "AAA", "BBB", [(p["nome"], 2, 1) for p in PALPS]) for i in range(n)]
+png4 = imagem.palpites_grid_png("16/jun", _jg(4))
+png6 = imagem.palpites_grid_png("25/jun", _jg(6))
+check("PNG (4 jogos) é PNG válido e não-trivial",
+      png4[:8] == b"\x89PNG\r\n\x1a\n" and len(png4) > 2000, str(len(png4)))
+check("PNG (6 jogos) é PNG válido e não-trivial",
+      png6[:8] == b"\x89PNG\r\n\x1a\n" and len(png6) > 2000, str(len(png6)))
+try:
+    imagem.palpites_grid_png("x", [])
+    _empty_ok = False
+except Exception:
+    _empty_ok = True
+check("dia sem jogos → erro explícito (não gera imagem vazia)", _empty_ok)
+
 print("\n" + ("✅ QA DO SITE PASSOU — pontuação fiel ao oráculo validado"
               if not fails else f"❌ QA FALHOU: {fails}"))
 sys.exit(0 if not fails else 1)

@@ -14,6 +14,8 @@ import fixture_copa_2026 as fx
 import score_engine as se
 import scoring
 import data as D
+import fonte_api
+import imagem
 
 st.set_page_config(page_title="Bolão PCT — Copa 2026", page_icon="🏆", layout="wide")
 
@@ -84,6 +86,20 @@ if not _online:
 meta, PALPS, REAL, RADV, FONTE = carregar()
 PEN = meta.get("penalidades", {})
 JOGADOS = sorted(REAL)
+
+
+@st.cache_data(ttl=3600)   # palpites são congelados → cache estável (não depende do resultado)
+def _grade_png(nums, dia):
+    """Bytes PNG da grade colorida de palpites (palpiteiros × jogos do dia). Ver imagem.py."""
+    jogos = []
+    for num in nums:
+        _, t1, t2 = GROUP_INFO[num]
+        tla1 = fonte_api.EN_TO_TLA.get(t1, t1[:3].upper())
+        tla2 = fonte_api.EN_TO_TLA.get(t2, t2[:3].upper())
+        linhas = [(q["nome"], q["scores"][num][0], q["scores"][num][1]) for q in PALPS]
+        jogos.append((num, tla1, tla2, linhas))
+    return imagem.palpites_grid_png(dia, jogos)
+
 
 st.sidebar.title("🏆 Bolão PCT")
 st.sidebar.caption("Copa 2026 · EUA-México-Canadá")
@@ -296,6 +312,16 @@ elif pagina == "⚽ Jogos & Gabarito":
         st.link_button(f"📲 Compartilhar palpites de {dia} no WhatsApp",
                        "https://wa.me/?text=" + urllib.parse.quote(texto))
 
+    def _imagem_dia(nums_dia, dia):
+        # imagem colorida (grade palpiteiros × jogos) p/ mandar no zap — texto não carrega cor
+        with st.expander(f"🖼️ Imagem dos palpites de {dia} (p/ WhatsApp)"):
+            png = _grade_png(tuple(nums_dia), dia)
+            st.image(png, width="stretch")
+            st.download_button(f"⬇️ Baixar imagem de {dia}", data=png,
+                               file_name=f"palpites_{dia.replace('/', '-')}.png",
+                               mime="image/png", key=f"img_{dia}")
+            st.caption("No celular: segure na imagem (ou baixe) → **Compartilhar** → WhatsApp.")
+
     st.subheader("Fase de grupos")
     dias_g = {}
     for num in sorted(GROUP_INFO):
@@ -317,6 +343,7 @@ elif pagina == "⚽ Jogos & Gabarito":
                     linhas.append({"Palpiteiro": q["nome"], "Palpite": f"{g1} x {g2}", "Pontos": pts})
                 st.dataframe(pd.DataFrame(linhas), width="stretch", hide_index=True)
         _botao_zap_dia(_zap_grupos(nums_dia, dia), dia)
+        _imagem_dia(nums_dia, dia)
 
     st.subheader("Mata-mata")
     if rd is None:
