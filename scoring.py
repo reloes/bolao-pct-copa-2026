@@ -190,14 +190,13 @@ def avaliar(palp, real_scores, real_advancers, penalidades):
 
 
 def ranking(palps, real_scores, real_advancers, penalidades):
-    """Avalia todos e devolve a lista ordenada (total desc → chave de desempate desc; nome só
-    para a ORDEM DE EXIBIÇÃO dos empatados). A POSIÇÃO segue a semântica da planilha validada
-    (COUNTIF de quem está estritamente acima + 1): quem empata em total E chave i–xiii
-    DIVIDE a mesma posição — o regulamento não desempata além do xiii."""
+    """Avalia todos e devolve a lista ordenada. **A POSIÇÃO depende SÓ do total** (decisão Renato
+    2026-06-14): quem empata no total DIVIDE a mesma posição durante a Copa (ex.: 1,2,2,4,4,6…),
+    fiel ao regulamento ('desempate no caso de empate na pontuação FINAL'). A chave de desempate
+    (i–xiii) ainda ordena a EXIBIÇÃO entre os empatados (quem está à frente aparece em cima) e
+    decide o campeão/pódio só no fim — mas NÃO altera o número da posição."""
     rows = [avaliar(p, real_scores, real_advancers, penalidades) for p in palps]
-    rows.sort(key=lambda r: (-r["total"], -r["dkey"], r["nome"].lower()))
+    rows.sort(key=lambda r: (-r["total"], -r["dkey"], r["nome"].lower()))   # exibição
     for r in rows:
-        r["pos"] = 1 + sum(1 for o in rows
-                           if o["total"] > r["total"]
-                           or (o["total"] == r["total"] and o["dkey"] > r["dkey"]))
+        r["pos"] = 1 + sum(1 for o in rows if o["total"] > r["total"])      # posição: só o total
     return rows

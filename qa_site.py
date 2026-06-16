@@ -103,16 +103,21 @@ check("alguém pontuou no J1 sem penalidade",
 sem_pen = scoring.ranking(PALPS, real, {}, {})
 d2 = next(r for r in sem_pen if r["nome"] == "DACA")
 check("sem a penalidade, DACA teria 6 no J1", d2["perA"][1] == 6, str(d2["perA"][1]))
-# posições com EMPATE (semântica da planilha: empatados em total+chave dividem a posição)
-ok_pos = all(r["pos"] == 1 + sum(1 for o in rows if o["total"] > r["total"]
-                                 or (o["total"] == r["total"] and o["dkey"] > r["dkey"]))
-             for r in rows)
-check("posição = 1 + nº de estritamente melhores (COUNTIF da planilha)", ok_pos)
-ok_tie = all((r["pos"] == o["pos"]) == ((r["total"], r["dkey"]) == (o["total"], o["dkey"]))
-             for r in rows for o in rows)
-check("mesma posição ⇔ empate exato em total E chave i–xiii", ok_tie)
-lideres = [r["nome"] for r in rows if r["pos"] == 1]
-check(f"líderes empatados dividem o 1º lugar: {lideres}", len(lideres) >= 2)
+# posições: empate por TOTAL (decisão Renato 14/jun) — desempate NÃO afeta a posição até o fim
+ok_pos = all(r["pos"] == 1 + sum(1 for o in rows if o["total"] > r["total"]) for r in rows)
+check("posição = 1 + nº com total estritamente maior (só o total)", ok_pos)
+ok_tie = all((r["pos"] == o["pos"]) == (r["total"] == o["total"]) for r in rows for o in rows)
+check("mesma posição ⇔ MESMO total (desempate não muda a posição)", ok_tie)
+# cenário do bug reportado: dois com total igual e dkey diferente DEVEM dividir a posição
+real_emp = {n: (2, 0) for n in range(1, 9)}                       # 8 jogos p/ separar dkeys (jogo EUA J4)
+rows_e = scoring.ranking(PALPS, real_emp, {}, PEN)
+from collections import defaultdict
+by_total = defaultdict(set)
+for r in rows_e:
+    by_total[r["total"]].add(r["pos"])
+check("empatados no total dividem a posição mesmo com desempate diferente",
+      all(len(ps) == 1 for ps in by_total.values()),
+      str({t: ps for t, ps in by_total.items() if len(ps) > 1}))
 
 # ---------- 4) Empates + 'quem passa'
 print("\n4) Empates no mata-mata ('quem passa' respeitado):")
