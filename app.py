@@ -126,15 +126,16 @@ if pagina == "🏅 Ranking":
 
     # --- exportar pro WhatsApp (pedido do grupo; SEM o link do site na msg) ---
     # na URL do wa.me NÃO usar emoji: o link_button do Streamlit mangla p/ U+FFFD (�)
+    def _pun(r):   # sufixo de punição na linha (só quem tem): bruto + valor descontado
+        return f" (bruto {r['total'] + r['descontado']:g} · punição −{r['descontado']:g})" if r["descontado"] else ""
     zap_url = ("BOLÃO PCT — Copa 2026\n"
                f"Ranking após {len(JOGADOS)}/104 jogos:\n"
-               + "\n".join(f"{r['pos']}º {r['nome']}{' (J1 anulado)' if r['anulados'] else ''}"
-                           f" — {r['total']:g}" for r in rows))
+               + "\n".join(f"{r['pos']}º {r['nome']} — {r['total']:g}{_pun(r)}" for r in rows))
     medal_txt = {1: "🥇", 2: "🥈", 3: "🥉"}
     zap = ("🏆 BOLÃO PCT — Copa 2026\n"
            f"📊 Ranking após {len(JOGADOS)}/104 jogos:\n"
            + "\n".join(f"{medal_txt.get(r['pos'], str(r['pos']) + 'º')} {r['nome']}"
-                       f"{' ⚠️' if r['anulados'] else ''} — {r['total']:g}" for r in rows))
+                       f"{' ⚠️' if r['anulados'] else ''} — {r['total']:g}{_pun(r)}" for r in rows))
     cz1, cz2 = st.columns([1, 2])
     cz1.link_button("📲 Compartilhar no WhatsApp", "https://wa.me/?text=" + urllib.parse.quote(zap_url))
     with cz2.expander("ver/copiar o texto da mensagem (com emojis — cole no zap)"):
