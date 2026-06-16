@@ -102,11 +102,15 @@ if pagina == "🏅 Ranking":
     st.title("🏅 Ranking — apuração oficial")
     rows = scoring.ranking(PALPS, REAL, RADV, PEN)
     medal = {1: "🥇", 2: "🥈", 3: "🥉"}
+    # Líquido = total (já pós-punição, é o que ordena) · Bruto = líquido + punição ·
+    # Punição = descontado (só Seção A hoje) · A·Grupos mostra o BRUTO (A+B+C = Bruto).
     df = pd.DataFrame([{
         "Pos": f"{medal.get(r['pos'], r['pos'])}",
         "Palpiteiro": r["nome"] + (" ⚠️" if r["anulados"] else ""),
-        "Total": r["total"],
-        "A · Grupos": r["A"],
+        "Líquido": r["total"],
+        "Bruto": r["total"] + r["descontado"],
+        "Punição": (f"−{r['descontado']:g}" if r["descontado"] else "—"),
+        "A · Grupos": r["A"] + r["descontado"],
         "B · Classificados": r["B"],
         "C · Mata-mata": r["C"],
     } for r in rows])
@@ -140,8 +144,10 @@ if pagina == "🏅 Ranking":
     sel = st.selectbox("Palpiteiro", [r["nome"] for r in rows])
     r = next(x for x in rows if x["nome"] == sel)
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Total", f"{r['total']:g}")
-    c2.metric("Seção A", f"{r['A']:g}")
+    c1.metric("Líquido", f"{r['total']:g}",
+              delta=(f"−{r['descontado']:g} punição" if r["descontado"] else None),
+              delta_color="inverse")
+    c2.metric("Seção A", f"{r['A'] + r['descontado']:g}")   # bruto (A+B+C = Bruto; punição no Líquido)
     c3.metric("Seção B", f"{r['B']:g}")
     c4.metric("Seção C", f"{r['C']:g}")
     psel = next((p for p in PALPS if p["nome"] == sel), None)
