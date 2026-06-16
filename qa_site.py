@@ -181,6 +181,17 @@ check("mata-mata NÃO deriva sem os 72 grupos completos (gate)",
 # ---------- 7) Imagem dos palpites do dia (imagem.py): cor 1-X-2 + intensidade por gols
 print("\n7) Imagem dos palpites do dia (imagem.py):")
 import imagem
+from PIL import ImageFont
+# FONTE: tem de carregar uma TrueType REAL (a DejaVu embarcada) — não o default do
+# Pillow (sem glifos 'Ã'/'—' → caixas □ em produção). Regressão do deploy de 16/jun.
+check("fonte embarcada carrega como TrueType (não o default sem acento)",
+      isinstance(imagem._font(imagem._FONTES_BOLD, 40), ImageFont.FreeTypeFont)
+      and isinstance(imagem._font(imagem._FONTES, 40), ImageFont.FreeTypeFont))
+check("1ª opção de fonte é a embarcada no repo (fonts/DejaVuSans*.ttf)",
+      imagem._FONTES[0].endswith("fonts/DejaVuSans.ttf")
+      and imagem._FONTES_BOLD[0].endswith("fonts/DejaVuSans-Bold.ttf")
+      and __import__("os").path.isfile(imagem._FONTES[0])
+      and __import__("os").path.isfile(imagem._FONTES_BOLD[0]))
 # matiz = coluna da aposta via sign(g1-g2) — casos do mockup de 16/jun
 check("2x1 → coluna 1 (vence a esquerda)", imagem.cor_palpite(2, 1)[1] == "1")
 check("1x1 → coluna X (empate)", imagem.cor_palpite(1, 1)[1] == "X")

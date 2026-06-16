@@ -5,13 +5,19 @@ Imagem PNG da GRADE de palpites de um dia (para compartilhar no WhatsApp).
 Grade palpiteiros × jogos do dia. A COR de cada célula segue as colunas 1-X-2 da
 aposta (estilo Loteca): vence o time da ESQUERDA (1, azul) · empate (X, vermelho) ·
 vence o time da DIREITA (2, verde). A INTENSIDADE do tom = total de gols no jogo
-(mais gols, tom mais forte). Desenhada com Pillow (sem navegador); fontes do sistema
-com fallback (DejaVu no Streamlit Cloud/Debian; Arial no macOS local).
+(mais gols, tom mais forte). Desenhada com Pillow (sem navegador).
+
+FONTE: embarcamos a DejaVu Sans no próprio repo (fonts/) e a carregamos por caminho
+RELATIVO, em PRIMEIRO lugar — porque no Streamlit Cloud as fontes do sistema podem
+NÃO estar no caminho esperado e o Pillow cai num default sem os glifos 'Ã'/'—'
+(produção mostrava "BOL□O", "BET□O"). Com a fonte no repo, produção = local.
+DejaVu é livremente redistribuível (licença Bitstream Vera/Arev) — ver fonts/README.txt.
 
 WhatsApp não aceita imagem por URL (wa.me só leva texto) → o caminho é baixar/segurar
 na imagem e usar Compartilhar → WhatsApp. Por isso o app entrega via download_button.
 """
 import io
+import os
 from PIL import Image, ImageDraw, ImageFont
 
 # --- cores base das 3 colunas da aposta (1-X-2); ajustáveis ---
@@ -25,12 +31,17 @@ NAVY = (26, 43, 99)         # cabeçalho (navy D1A)
 CINZA_CAB = (236, 239, 244)  # fundo da linha de cabeçalho (TLAs)
 ZEBRA = (247, 248, 250)     # leve faixa alternada na coluna de nomes
 
+SCALE = 2   # render em 2x → nítido mesmo esticado pelo st.image(width="stretch")
+
+_HERE = os.path.dirname(os.path.abspath(__file__))
 _FONTES = [
+    os.path.join(_HERE, "fonts", "DejaVuSans.ttf"),               # embarcada (garante glifos no Cloud)
     "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",            # Streamlit Cloud (Debian)
     "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",       # macOS
     "/System/Library/Fonts/Supplemental/Arial.ttf",
 ]
 _FONTES_BOLD = [
+    os.path.join(_HERE, "fonts", "DejaVuSans-Bold.ttf"),
     "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
     "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
     "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
@@ -43,7 +54,10 @@ def _font(paths, size):
             return ImageFont.truetype(p, size)
         except OSError:
             continue
-    return ImageFont.load_default()
+    try:                                # último recurso (não deve ocorrer: a fonte do repo é a 1ª)
+        return ImageFont.load_default(size)
+    except TypeError:
+        return ImageFont.load_default()
 
 
 def _lerp(c1, c2, a):
@@ -75,7 +89,7 @@ def _text_color(bg):
 
 
 def _centro(d, box, text, font, fill):
-    """Desenha text centralizado na caixa box=(x0,y0,x1,y1)."""
+    """Desenha text centralizado (h e v) na caixa box=(x0,y0,x1,y1)."""
     x0, y0, x1, y1 = box
     l, t, r, b = d.textbbox((0, 0), text, font=font)
     d.text((x0 + (x1 - x0 - (r - l)) / 2 - l, y0 + (y1 - y0 - (b - t)) / 2 - t),
@@ -93,15 +107,17 @@ def palpites_grid_png(dia, jogos):
         raise ValueError("nenhum jogo no dia")
     nomes = [n for n, _, _ in jogos[0][3]]
     n_col, n_lin = len(jogos), len(nomes)
+    S = SCALE
 
-    COL_NOME = 200       # largura da coluna de nomes
-    CEL = 152            # largura de cada coluna de jogo
-    TIT_H = 72           # faixa do título
-    CAB_H = 58           # linha de cabeçalho (TLAs)
-    LIN_H = 64           # altura de cada linha de palpiteiro
-    LEG_H = 86           # rodapé com a legenda
-    GAP = 4              # respiro entre células (gera o "grid" branco)
-    RAIO = 9             # cantos arredondados das células
+    COL_NOME = 200 * S       # largura da coluna de nomes
+    CEL = 152 * S            # largura de cada coluna de jogo
+    TIT_H = 72 * S           # faixa do título
+    CAB_H = 58 * S           # linha de cabeçalho (TLAs)
+    LIN_H = 64 * S           # altura de cada linha de palpiteiro
+    LEG_H = 92 * S           # rodapé com a legenda
+    GAP = 4 * S              # respiro entre células (gera o "grid" branco)
+    RAIO = 9 * S             # cantos arredondados das células
+    PAD = 18 * S             # padding lateral
 
     W = COL_NOME + n_col * CEL
     H = TIT_H + CAB_H + n_lin * LIN_H + LEG_H
@@ -109,12 +125,11 @@ def palpites_grid_png(dia, jogos):
     img = Image.new("RGB", (W, H), BRANCO)
     d = ImageDraw.Draw(img)
 
-    f_tit = _font(_FONTES_BOLD, 34)
-    f_cab = _font(_FONTES_BOLD, 25)
-    f_nome = _font(_FONTES_BOLD, 25)
-    f_cel = _font(_FONTES_BOLD, 27)
-    f_leg = _font(_FONTES, 20)
-    f_leg_b = _font(_FONTES_BOLD, 20)
+    f_tit = _font(_FONTES_BOLD, 34 * S)
+    f_cab = _font(_FONTES_BOLD, 25 * S)
+    f_nome = _font(_FONTES_BOLD, 25 * S)
+    f_cel = _font(_FONTES_BOLD, 27 * S)
+    f_leg = _font(_FONTES, 20 * S)
 
     # --- título (faixa navy) ---
     d.rectangle([0, 0, W, TIT_H], fill=NAVY)
@@ -133,7 +148,8 @@ def palpites_grid_png(dia, jogos):
         y = yb + li * LIN_H
         if li % 2 == 1:                                   # zebra suave na coluna de nomes
             d.rectangle([0, y, COL_NOME, y + LIN_H], fill=ZEBRA)
-        d.text((18, y + (LIN_H - 25) / 2), nome, font=f_nome, fill=PRETO)
+        lb, tb, rb, bb = d.textbbox((0, 0), nome, font=f_nome)
+        d.text((PAD, y + (LIN_H - (bb - tb)) / 2 - tb), nome, font=f_nome, fill=PRETO)
         for c, (num, _t1, _t2, linhas) in enumerate(jogos):
             _, g1, g2 = linhas[li]
             bg, _col = cor_palpite(g1, g2)
@@ -144,19 +160,19 @@ def palpites_grid_png(dia, jogos):
 
     # --- legenda (rodapé) ---
     yl = H - LEG_H
-    d.rectangle([0, yl, W, H], fill=BRANCO)
-    d.line([0, yl, W, yl], fill=CINZA_CAB, width=2)
-    sw = 22                                               # tamanho do quadrado-amostra
-    cy = yl + 18
+    d.line([0, yl, W, yl], fill=CINZA_CAB, width=2 * S)
+    sw = 22 * S                                           # tamanho do quadrado-amostra
+    cy = yl + 18 * S
     itens = [(AZUL, "1 vence o time da esquerda"),
              (VERMELHO, "X empate"),
              (VERDE, "2 vence o time da direita")]
-    x = 18
+    x = PAD
     for cor, txt in itens:
-        d.rounded_rectangle([x, cy, x + sw, cy + sw], radius=5, fill=cor)
-        d.text((x + sw + 8, cy + 1), txt, font=f_leg, fill=PRETO)
-        x += sw + 8 + d.textlength(txt, font=f_leg) + 28
-    d.text((18, cy + sw + 12),
+        d.rounded_rectangle([x, cy, x + sw, cy + sw], radius=5 * S, fill=cor)
+        lb, tb, rb, bb = d.textbbox((0, 0), txt, font=f_leg)
+        d.text((x + sw + 8 * S, cy + (sw - (bb - tb)) / 2 - tb), txt, font=f_leg, fill=PRETO)
+        x += sw + 8 * S + (rb - lb) + 28 * S
+    d.text((PAD, cy + sw + 12 * S),
            "Tom mais forte = mais gols no jogo  ·  bolao-pct-copa-2026.streamlit.app",
            font=f_leg, fill=CINZA)
 
