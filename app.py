@@ -8,6 +8,8 @@ Gabarito: Google Sheet do organizador (CSV publicado em st.secrets["GABARITO_CSV
 ou gabarito_local.json. Rode local: streamlit run app.py --server.port 8503
 """
 import urllib.parse
+from datetime import datetime, date
+from zoneinfo import ZoneInfo
 import streamlit as st
 import pandas as pd
 import fixture_copa_2026 as fx
@@ -322,12 +324,17 @@ elif pagina == "⚽ Jogos & Gabarito":
                                mime="image/png", key=f"img_{dia}")
             st.caption("No celular: segure na imagem (ou baixe) → **Compartilhar** → WhatsApp.")
 
-    st.subheader("Fase de grupos")
-    dias_g = {}
+    # dia a dia: abre no dia de HOJE com um seletor; "ver todos" abre a lista completa
+    dias_g, dias_k = {}, {}
     for num in sorted(GROUP_INFO):
         dias_g.setdefault(GROUP_INFO[num][0], []).append(num)
-    for dia, nums_dia in dias_g.items():
-        st.markdown(f"#### 📅 {dia}")
+    for num in sorted(KO_INFO):
+        dias_k.setdefault(KO_INFO[num][1], []).append(num)
+
+    _INFO_MATA = ("Os confrontos REAIS do mata-mata aparecem quando a fase de grupos terminar — "
+                  "mas o palpite de cada um já está travado: abra um jogo para ver o confronto previsto.")
+
+    def _render_grupos_dia(dia, nums_dia):
         for num in nums_dia:
             _, t1, t2 = GROUP_INFO[num]
             r = REAL.get(num)
@@ -345,15 +352,7 @@ elif pagina == "⚽ Jogos & Gabarito":
         _botao_zap_dia(_zap_grupos(nums_dia, dia), dia)
         _imagem_dia(nums_dia, dia)
 
-    st.subheader("Mata-mata")
-    if rd is None:
-        st.info("Os confrontos REAIS aparecem quando a fase de grupos terminar — mas o palpite "
-                "de cada um já está travado: abra um jogo para ver o confronto que cada um previu.")
-    dias_k = {}
-    for num in sorted(KO_INFO):
-        dias_k.setdefault(KO_INFO[num][1], []).append(num)
-    for dia, nums_dia in dias_k.items():
-        st.markdown(f"#### 📅 {dia}")
+    def _render_mata_dia(dia, nums_dia):
         for num in nums_dia:
             fase_k, _, s1, s2 = KO_INFO[num]
             r = REAL.get(num)
@@ -380,6 +379,57 @@ elif pagina == "⚽ Jogos & Gabarito":
                                    "Pontos": pts})
                 st.dataframe(pd.DataFrame(linhas), width="stretch", hide_index=True)
         _botao_zap_dia(_zap_mata(nums_dia, dia), dia)
+
+    # lista ordenada de TODOS os dias (grupos + mata-mata), com rótulo de fase/status
+    _MES = {"jan": 1, "fev": 2, "mar": 3, "abr": 4, "mai": 5, "jun": 6,
+            "jul": 7, "ago": 8, "set": 9, "out": 10, "nov": 11, "dez": 12}
+
+    def _data(diastr):
+        dd, mm = diastr.split("/")
+        return date(2026, _MES[mm], int(dd))
+
+    todos_dias = [(_data(d), d, "grupos", "G", nums) for d, nums in dias_g.items()]
+    for d, nums in dias_k.items():
+        fl = " / ".join(dict.fromkeys(FASE_PT[KO_INFO[n][0]] for n in nums))
+        todos_dias.append((_data(d), d, fl, "K", nums))
+    todos_dias.sort(key=lambda t: t[0])
+    try:
+        _hoje = datetime.now(ZoneInfo("America/Sao_Paulo")).date()
+    except Exception:
+        _hoje = datetime.now().date()
+    _default = next((i for i, t in enumerate(todos_dias) if t[0] >= _hoje), len(todos_dias) - 1)
+
+    if st.toggle("📜 Ver todos os dias (lista completa)", value=False,
+                 help="Mostra grupos e mata-mata inteiros, um dia embaixo do outro."):
+        st.subheader("Fase de grupos")
+        for dia, nums_dia in dias_g.items():
+            st.markdown(f"#### 📅 {dia}")
+            _render_grupos_dia(dia, nums_dia)
+        st.subheader("Mata-mata")
+        if rd is None:
+            st.info(_INFO_MATA)
+        for dia, nums_dia in dias_k.items():
+            st.markdown(f"#### 📅 {dia}")
+            _render_mata_dia(dia, nums_dia)
+    else:
+        # opções = rótulos estáveis (dia + fase); status volátil (hoje/✓/andamento) vai na legenda
+        labels = [f"{d} · {fl}" for (_, d, fl, _, _) in todos_dias]
+        by_label = dict(zip(labels, todos_dias))
+        sel = st.selectbox("📅 Escolha o dia", labels, index=_default, key="dia_jogos")
+        data_i, dia, fl, kind, nums_dia = by_label[sel]
+        nres = sum(1 for n in nums_dia if REAL.get(n))
+        if data_i == _hoje:
+            st.caption("🔴 jogos de hoje")
+        elif nres and nres == len(nums_dia):
+            st.caption("✓ resultados lançados")
+        elif nres:
+            st.caption("🟡 em andamento")
+        elif data_i > _hoje:
+            st.caption("🗓️ ainda não começou")
+        if kind == "K" and rd is None:
+            st.info(_INFO_MATA)
+        st.markdown(f"#### {dia} · {fl}")
+        (_render_grupos_dia if kind == "G" else _render_mata_dia)(dia, nums_dia)
 
 
 # ============================================================ 🎮 SIMULADOR
