@@ -47,9 +47,25 @@ def tn(team):
     return f"{FLAG.get(team, '')} {PT[team]}".strip() if team else "—"
 
 
-@st.cache_data(ttl=600)   # 10 min; o botão "Atualizar resultados" força a busca na hora
+@st.cache_data(ttl=3600)   # palpites são congelados
+def _palpites():
+    return D.load_palpites()
+
+
+@st.cache_data(ttl=600)    # API: cache LONGO (respeita o rate-limit 10/min compartilhado c/ Loteca)
+def _gabarito_base(token):
+    return D.load_gabarito_base(token)        # gabarito_local + API football-data.org (snapshot)
+
+
+@st.cache_data(ttl=45)     # Sheet override: cache CURTO → correção manual do organizador reflete em ~45s
+def _gabarito_sheet(url):
+    return D.load_sheet_override(url)         # só a camada Sheet (VENCE a base)
+
+
 def carregar():
-    meta, palps = D.load_palpites()
+    # camadas separadas: a base (API) fica em cache longo; o override (Sheet) em cache curto,
+    # pra uma correção manual aparecer em segundos sem esperar os 10 min nem bater na API.
+    meta, palps = _palpites()
     try:
         url = st.secrets["GABARITO_CSV_URL"]
     except Exception:
@@ -58,7 +74,11 @@ def carregar():
         token = st.secrets["FOOTBALL_DATA_API_KEY"]
     except Exception:
         token = None
-    real, radv, fonte = D.load_gabarito(url, token)
+    s, a, f_base = _gabarito_base(token)
+    s_s, s_a, f_sheet = _gabarito_sheet(url)
+    real = {**s, **s_s}                       # Sheet override vence a base, por jogo
+    radv = {**a, **s_a}
+    fonte = " + ".join(x for x in (f_base if f_base != "vazio" else None, f_sheet) if x) or "vazio"
     return meta, palps, real, radv, fonte
 
 

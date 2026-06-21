@@ -15,13 +15,22 @@ import os
 import csv
 import json
 import io
+import time
 import tempfile
 import unicodedata
 import urllib.request
 import fixture_copa_2026 as fx
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-_REV = "gabarito-merge-api+sheet+local-v3-status"   # marca de revisão (força redeploy/pull limpo)
+_REV = "gabarito-base+sheet-split-v4"   # marca de revisão (força redeploy/pull limpo)
+
+
+def _bust(url):
+    """Anti-cache p/ o CSV publicado do Google (evita CDN servir versão velha do override).
+    Só mexe em http(s); deixa file:// intacto (usado nos testes)."""
+    if not url or not url.startswith(("http://", "https://")):
+        return url
+    return f"{url}{'&' if '?' in url else '?'}_cb={int(time.time())}"
 
 # Snapshot persistente do último gabarito bom da API. Resolve o bug do "jogo some": quando a
 # API falha (429 do rate-limit 10/min compartilhado, ou timeout), em vez de degradar para
@@ -103,7 +112,7 @@ def load_status(csv_url):
     if not csv_url:
         return True, None
     try:
-        with urllib.request.urlopen(csv_url, timeout=10) as resp:
+        with urllib.request.urlopen(_bust(csv_url), timeout=10) as resp:
             rows = list(csv.DictReader(io.StringIO(resp.read().decode("utf-8"))))
     except Exception:
         return True, None
@@ -144,15 +153,14 @@ def _load_local():
 
 def _load_sheet(csv_url):
     """Google Sheet do organizador (CSV publicado) → (scores, advancers)."""
-    with urllib.request.urlopen(csv_url, timeout=10) as resp:
+    with urllib.request.urlopen(_bust(csv_url), timeout=10) as resp:
         text = resp.read().decode("utf-8")
     return _parse_rows(list(csv.DictReader(io.StringIO(text))))
 
 
-def load_gabarito(csv_url=None, api_token=None):
-    """(scores, advancers, fonte) com MERGE por prioridade (maior vence):
-    Sheet do organizador (override manual) > API football-data.org (automático) >
-    gabarito_local.json (fallback). Cada camada sobrescreve a anterior POR JOGO."""
+def load_gabarito_base(api_token=None):
+    """Camada AUTOMÁTICA: gabarito_local.json (fallback) + API football-data.org (snapshot
+    acumulado). (scores, advancers, fonte). É a parte cara/rate-limited → cache LONGO no app."""
     fontes = []
     scores, advancers = _load_local()                       # base/fallback
     if scores:
@@ -173,13 +181,28 @@ def load_gabarito(csv_url=None, api_token=None):
             advancers.update(snap_a)
             fontes.append(f"API instável — usando cache ({len(snap_s)} jogos)"
                           if snap_s else "API indisponível")
-    if csv_url:                                             # override do organizador (vence)
-        try:
-            s_s, s_a = _load_sheet(csv_url)
-            scores.update(s_s)
-            advancers.update(s_a)
-            if s_s or s_a:
-                fontes.append(f"Sheet override ({len(s_s)})")
-        except Exception:
-            fontes.append("Sheet indisponível")
+    return scores, advancers, " + ".join(fontes) if fontes else "vazio"
+
+
+def load_sheet_override(csv_url=None):
+    """Camada MANUAL: só a Sheet do organizador (override que VENCE a API). É barata (1 CSV,
+    sem rate-limit) → cache CURTO no app, p/ a correção refletir em segundos. (scores, advancers,
+    fonte|None)."""
+    if not csv_url:
+        return {}, {}, None
+    try:
+        s_s, s_a = _load_sheet(csv_url)
+        return s_s, s_a, (f"Sheet override ({len(s_s)})" if (s_s or s_a) else None)
+    except Exception:
+        return {}, {}, "Sheet indisponível"
+
+
+def load_gabarito(csv_url=None, api_token=None):
+    """MERGE completo (Sheet override VENCE a base local+API). Mantido p/ chamadas avulsas e QA;
+    o app usa as duas camadas em caches separados (base longo, Sheet curto)."""
+    scores, advancers, f_base = load_gabarito_base(api_token)
+    s_s, s_a, f_sheet = load_sheet_override(csv_url)
+    scores.update(s_s)                                       # override por jogo
+    advancers.update(s_a)
+    fontes = [f for f in (f_base if f_base != "vazio" else None, f_sheet) if f]
     return scores, advancers, " + ".join(fontes) if fontes else "vazio"
