@@ -254,6 +254,66 @@ for _f in (_p, D._OVERRIDE_SNAP):
     except Exception:
         pass
 
+# ---------- 9) Chaveamento (bracket) do Simulador: ordem da ÁRVORE + imagem
+print("\n9) Chaveamento do Simulador (bracket):")
+import imagem
+import fonte_api as _fa
+import fixture_copa_2026 as _fx
+_KO = {n: (s1, s2) for n, _, _, _, s1, s2 in _fx.KO_MATCHES}
+_kids = lambda n: [int(s[1:]) for s in _KO[n] if s and s[0] == "W"]
+_lv, _cur = [], [104]
+while _cur:
+    _lv.append(_cur)
+    _nx = []
+    for n in _cur:
+        _nx += _kids(n)
+    _cur = _nx
+_lv.reverse()                                                  # [R32(16),R16(8),QF(4),SF(2),F(1)]
+check("ordem da árvore por rodada = 16/8/4/2/1", [len(x) for x in _lv] == [16, 8, 4, 2, 1], str([len(x) for x in _lv]))
+_b = byname[DECISIVOS[0]]                                      # bracket COMPLETO (sem empate em aberto)
+_sd = scoring.derive_full_adv(_b["scores"], _b["advancers"])
+
+
+def _adj(parent_lv, child_lv):                                 # cada chave = vencedores das 2 chaves anteriores
+    for j, pg in enumerate(parent_lv):
+        a, b = _sd["teams"][pg]
+        if {a, b} != {_sd["win"][child_lv[2 * j]], _sd["win"][child_lv[2 * j + 1]]}:
+            return False
+    return True
+
+
+check("adjacência da árvore (R16<-R32, QF<-R16, SF<-QF, F<-SF) — pega o bug do bracket consecutivo",
+      all(_adj(_lv[i + 1], _lv[i]) for i in range(4)))
+_tla = lambda t: _fa.EN_TO_TLA.get(t, "") if t else ""
+
+
+def _mk(n):
+    a, b = _sd["teams"].get(n, (None, None))
+    sc, w = _b["scores"].get(n), _sd["win"].get(n)
+    return (_tla(a), sc[0] if sc else None, w is not None and w == a,
+            _tla(b), sc[1] if sc else None, w is not None and w == b)
+
+
+_h = lambda l: (l[:len(l) // 2], l[len(l) // 2:])
+(_r32L, _r32R), (_r16L, _r16R), (_qfL, _qfR) = _h(_lv[0]), _h(_lv[1]), _h(_lv[2])
+_mkc = lambda nums: [_mk(n) for n in nums]
+_left = [_mkc(c) for c in (_r32L, _r16L, _qfL, [_lv[3][0]])]
+_right = [_mkc(c) for c in (_r32R, _r16R, _qfR, [_lv[3][1]])]
+_pb = imagem.bracket_png(_left, _right, _mk(_lv[4][0]), _tla(_sd["champion"]), None)
+check("bracket_png two-sided é PNG válido e não-trivial", _pb[:8] == b"\x89PNG\r\n\x1a\n" and len(_pb) > 5000, str(len(_pb)))
+check("campeão do bracket definido (= derivação)", _tla(_sd["champion"]) != "")
+# derive_partial: bracket da CLASSIFICAÇÃO DE MOMENTO (sem o gate de 72 grupos)
+_gp_full = {n: _b["scores"][n] for n in range(1, 73)}
+check("derive_partial com 72 grupos == derive_full_adv (standings idênticos)",
+      scoring.derive_partial(_gp_full, {})["standings"] == _sd["standings"])
+_gp_part = {n: _b["scores"][n] for n in range(1, 73) if n % 2 == 0}    # metade dos jogos de grupo
+_dp = scoring.derive_partial(_gp_part, {})
+_r32t = [t for n in range(73, 89) for t in _dp["teams"][n]]
+check("derive_partial (parcial): R32 com 32 times reais distintos (classificação de momento)",
+      len(_r32t) == 32 and all(_r32t) and len(set(_r32t)) == 32)
+check("derive_partial (parcial): rodadas após os 32-avos ficam indefinidas sem placar de KO",
+      _dp["teams"][89][0] is None and _dp["champion"] is None)
+
 print("\n" + ("✅ QA DO SITE PASSOU — pontuação fiel ao oráculo validado"
               if not fails else f"❌ QA FALHOU: {fails}"))
 sys.exit(0 if not fails else 1)

@@ -70,6 +70,58 @@ def derive_full_adv(scores, advancers=None):
             "third": win.get(103), "fourth": lose.get(103)}
 
 
+def derive_partial(scores, advancers=None):
+    """Como derive_full_adv, mas SEM o gate de 72 grupos: usa a CLASSIFICAÇÃO DE MOMENTO (provisória)
+    dos grupos a partir dos jogos já preenchidos. Os 32-avos saem com os classificados de momento;
+    as rodadas seguintes ficam indefinidas (None) até haver placar de mata-mata. SÓ p/ EXIBIR o
+    chaveamento (não para pontuar — a pontuação segue gated em derive_full_adv)."""
+    advancers = advancers or {}
+    gs = {n: scores[n] for n in GROUP_NUMS if n in scores}
+    if not gs:
+        return None
+    d = eng.derive(gs, partial=True)
+    pos = {}
+    for L, order in d["standings"].items():
+        for i, t in enumerate(order):
+            pos[t] = i + 1
+    teams = {int(k[1:]): v for k, v in d["r32"].items()}
+    win, lose = {}, {}
+    for num in range(73, 105):
+        if num not in teams:
+            s1, s2 = KO_SLOTS[num]
+            teams[num] = (se._resolve(s1, win, lose), se._resolve(s2, win, lose))
+        a, b = teams[num]
+        p = scores.get(num)
+        if se._validpair(p) and (a or b):
+            ga, gb = p
+            if ga > gb:
+                win[num], lose[num] = a, b
+            elif gb > ga:
+                win[num], lose[num] = b, a
+            else:
+                adv = advancers.get(num)
+                win[num] = adv if adv in (a, b) else None
+                lose[num] = ((b if adv == a else a) if win[num] else None)
+        else:
+            win[num] = lose[num] = None
+
+    def setof(nums):
+        s = set()
+        for n in nums:
+            for t in teams.get(n, (None, None)):
+                if t:
+                    s.add(t)
+        return s
+
+    return {"pos": pos, "teams": teams, "win": win, "lose": lose,
+            "standings": d["standings"], "combo": d["combo_key"],
+            "R32": setof(range(73, 89)), "R16": setof(range(89, 97)),
+            "QF": setof(range(97, 101)), "SF": setof(range(101, 103)),
+            "DISP3": setof([103]), "FINAL": setof([104]),
+            "champion": win.get(104), "vice": lose.get(104),
+            "third": win.get(103), "fourth": lose.get(103)}
+
+
 # ------------------------------------------------- Seções (lógica IDÊNTICA ao oráculo)
 def section_A(palpite, real, anulados=()):
     """(total, {num: pontos}, pontos_descontados_pela_anulação)."""

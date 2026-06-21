@@ -123,6 +123,99 @@ def _grade_png(nums, dia):
     return imagem.palpites_grid_png(dia, jogos)
 
 
+# ------- chaveamento (bracket) do mata-mata: estrutura compartilhada por HTML e imagem -------
+def _btla(t):
+    return fonte_api.EN_TO_TLA.get(t, (t or "")[:3].upper()) if t else ""
+
+
+def _ko_order():
+    """Ordem dos jogos por rodada SEGUINDO a árvore real (slots W## do fixture), não a numérica —
+    pra cada chave ficar entre seus dois alimentadores. → [R32(16), R16(8), QF(4), SF(2), Final(1)]."""
+    KO = {n: (s1, s2) for n, _, _, _, s1, s2 in fx.KO_MATCHES}
+    kids = lambda n: [int(s[1:]) for s in KO[n] if s and s[0] == "W"]
+    levels, cur = [], [104]
+    while cur:
+        levels.append(cur)
+        nxt = []
+        for n in cur:
+            nxt += kids(n)
+        cur = nxt
+    levels.reverse()
+    return levels
+
+
+_KO_ORDER = _ko_order()
+
+
+def _bracket_struct(sd, sim):
+    """Estrutura TWO-SIDED do chaveamento: (left, right, final, campeão, 3º). left/right = 4 colunas de
+    FORA p/ DENTRO [R32(8),R16(4),QF(2),SF(1)]. Cada chave: (a_en,b_en,a_sc,b_sc,a_win,b_win)."""
+    R32, R16, QF, SF, _F = _KO_ORDER
+
+    def mk(num):
+        a, b = sd["teams"].get(num, (None, None))
+        sc, w = sim.get(num), sd["win"].get(num)
+        return (a, b, sc[0] if sc else None, sc[1] if sc else None,
+                w is not None and w == a, w is not None and w == b)
+    half = lambda lst: (lst[:len(lst) // 2], lst[len(lst) // 2:])
+    (r32L, r32R), (r16L, r16R), (qfL, qfR) = half(R32), half(R16), half(QF)
+    left = tuple(tuple(mk(n) for n in c) for c in (r32L, r16L, qfL, [SF[0]]))
+    right = tuple(tuple(mk(n) for n in c) for c in (r32R, r16R, qfR, [SF[1]]))
+    terceiro = mk(103) if sd["teams"].get(103, (None, None))[0] else None
+    return left, right, mk(104), sd.get("champion"), terceiro
+
+
+@st.cache_data(ttl=120)
+def _bracket_png_bytes(struct):
+    left, right, final, champ, ter = struct
+    cv = lambda col: [(_btla(a), sa, wa, _btla(b), sb, wb) for (a, b, sa, sb, wa, wb) in col]
+    cm = lambda m: (_btla(m[0]), m[2], m[4], _btla(m[1]), m[3], m[5]) if m else None
+    return imagem.bracket_png([cv(c) for c in left], [cv(c) for c in right], cm(final), _btla(champ), cm(ter))
+
+
+def _bracket_html(struct):
+    left, right, final, champ, ter = struct
+    colh = len(left[0]) * 64
+
+    def lab(t):
+        return f"{FLAG.get(t, '')} {fonte_api.EN_TO_TLA.get(t, '')}".strip() if t else "—"
+
+    def row(t, s, win):
+        return (f"<div class='bkt {'bkw' if win else ''}'><span>{lab(t)}</span>"
+                f"<span class='bks'>{'' if s is None else s}</span></div>")
+    box = lambda m: f"<div class='bkm'>{row(m[0], m[2], m[4])}{row(m[1], m[3], m[5])}</div>"
+    col = lambda c: f"<div class='bkc' style='height:{colh}px'>" + "".join(box(m) for m in c) + "</div>"
+    left_html = "".join(col(c) for c in left)
+    right_html = "".join(col(c) for c in reversed(right))
+    center = (f"<div class='bkc bkmid' style='height:{colh}px'>"
+              "<div style='font-size:10px;opacity:.6;margin-bottom:3px'>final</div>"
+              f"<div class='bkm bkfin'>{row(final[0], final[2], final[4])}{row(final[1], final[3], final[5])}</div>"
+              "<div class='bkcb'><div style='font-size:10px;color:#854F0B'>campeão</div>"
+              f"<div style='font-size:16px;font-weight:500;color:#633806'>{lab(champ)}</div></div>")
+    if ter:
+        center += ("<div style='font-size:10px;opacity:.6;margin-top:8px'>disputa de 3º</div>"
+                   f"<div class='bkm'>{row(ter[0], ter[2], ter[4])}{row(ter[1], ter[3], ter[5])}</div>")
+    center += "</div>"
+    heads = ["32-avos", "Oitavas", "Quartas", "Semi", "Final", "Semi", "Quartas", "Oitavas", "32-avos"]
+    hd = "".join(f"<div>{h}</div>" for h in heads)
+    css = ("<style>"
+           ".bkwrap{overflow:auto;max-height:600px;border:0.5px solid rgba(128,128,128,.25);border-radius:12px}"
+           ".bkhd{display:flex;position:sticky;top:0;background:rgba(127,127,127,.12);"
+           "border-bottom:0.5px solid rgba(128,128,128,.25);z-index:2}"
+           ".bkhd>div{min-width:120px;padding:7px 5px;font-size:12px;font-weight:500;text-align:center;opacity:.75}"
+           ".bk{display:flex;padding:6px}"
+           ".bkc{display:flex;flex-direction:column;justify-content:space-around;min-width:120px}"
+           ".bkmid{justify-content:center;align-items:center}"
+           ".bkm{margin:3px 5px;border:0.5px solid rgba(128,128,128,.3);border-radius:8px;overflow:hidden;min-width:108px}"
+           ".bkfin{border:2px solid rgba(0,146,180,.5)}"
+           ".bkt{display:flex;justify-content:space-between;gap:8px;padding:4px 8px;font-size:13px;opacity:.6}"
+           ".bkt.bkw{background:rgba(0,146,180,.16);font-weight:500;opacity:1}"
+           ".bks{font-variant-numeric:tabular-nums;opacity:.85}"
+           ".bkcb{background:#FAEEDA;border:2px solid #EF9F27;border-radius:8px;padding:6px 14px;text-align:center;margin-top:6px}"
+           "</style>")
+    return f"{css}<div class='bkwrap'><div class='bkhd'>{hd}</div><div class='bk'>{left_html}{center}{right_html}</div></div>"
+
+
 st.sidebar.title("🏆 Bolão PCT")
 st.sidebar.caption("Copa 2026 · EUA-México-Canadá")
 pagina = st.sidebar.radio("Páginas", ["🏅 Ranking", "📋 Palpites", "⚽ Jogos & Gabarito",
@@ -490,10 +583,11 @@ elif pagina == "🎮 Simulador":
     n_grp = sum(1 for n in sim if n <= 72)
     sim_adv = {}
     if n_grp < 72:
-        st.info(f"Grupos preenchidos: **{n_grp}/72**. Complete os 72 para liberar o mata-mata "
-                "simulado (igual à planilha: o bracket só deriva com a fase de grupos completa).")
+        st.info(f"Grupos preenchidos: **{n_grp}/72**. O chaveamento abaixo já mostra a "
+                "**classificação de momento** (cada vaga vira o time real conforme o grupo decide). "
+                "Complete os 72 para **simular** os jogos do mata-mata.")
     else:
-        st.subheader("Mata-mata (confrontos derivados da sua simulação)")
+        st.subheader("Mata-mata (simule os confrontos)")
         sd_partial = scoring.derive_full_adv(sim, {})
         for fase_key in ("R32", "R16", "QF", "SF", "3P", "F"):
             nums = sorted(n for n, (f_, *_), in KO_INFO.items() if f_ == fase_key)
@@ -522,6 +616,24 @@ elif pagina == "🎮 Simulador":
                             adv = st.radio(f"Pênaltis J{num} — quem passa?", [tn(a), tn(b)],
                                            key=f"sim_{num}_adv", horizontal=True)
                             sim_adv[num] = a if adv == tn(a) else b
+
+    st.subheader("🗺️ Chaveamento")
+    st.caption("Times pela **classificação de momento** dos grupos — cada vaga vira o real conforme "
+               "o grupo decide; o vencedor de cada chave avança. Rola na horizontal/vertical."
+               if n_grp < 72 else
+               "Derivado da sua simulação — o vencedor de cada chave avança; o campeão sai no centro.")
+    _sd_bracket = scoring.derive_partial(sim, sim_adv)
+    if _sd_bracket:
+        _bk = _bracket_struct(_sd_bracket, sim)
+        st.html(_bracket_html(_bk))
+        with st.expander("🖼️ Imagem do chaveamento (p/ compartilhar)"):
+            _bk_png = _bracket_png_bytes(_bk)
+            st.image(_bk_png, width="stretch")
+            st.download_button("⬇️ Baixar chaveamento (PNG)", data=_bk_png,
+                               file_name="chaveamento_simulado.png", mime="image/png", key="bk_png")
+            st.caption("No celular: segure na imagem (ou baixe) → Compartilhar → WhatsApp.")
+    else:
+        st.info("Preencha ao menos alguns jogos de grupo para ver o chaveamento.")
 
     st.subheader("🏅 Ranking simulado")
     rows = scoring.ranking(PALPS, sim, sim_adv, PEN)

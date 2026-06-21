@@ -77,12 +77,13 @@ def rank_group(teams, matches):
     return order, pts, gd, gf
 
 
-def derive(scores):
-    """scores: {match_num: (g1,g2)} dos 72 jogos de grupo.
+def derive(scores, partial=False):
+    """scores: {match_num: (g1,g2)} dos 72 jogos de grupo. partial=True usa só os jogos já
+    preenchidos (classificação DE MOMENTO) em vez de exigir os 6 de cada grupo.
     Retorna dict com standings, terceiros, combinação e confrontos dos 32-avos."""
     standings = {}; stats = {}; thirds = []
     for L, teams in fx.GROUPS.items():
-        ms = [(t1, t2, *scores[num]) for num, t1, t2 in GROUP_FIXT[L]]
+        ms = [(t1, t2, *scores[num]) for num, t1, t2 in GROUP_FIXT[L] if not partial or num in scores]
         order, pts, gd, gf = rank_group(teams, ms)
         standings[L] = order
         for t in teams:

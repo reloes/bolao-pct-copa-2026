@@ -179,3 +179,102 @@ def palpites_grid_png(dia, jogos):
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     return buf.getvalue()
+
+
+# ===================== Chaveamento do mata-mata (bracket) =====================
+AZUL_CLARO = _lerp(BRANCO, AZUL, 0.20)
+OURO = (212, 175, 55)
+OURO_BG = (250, 238, 218)
+OURO_TX = (99, 56, 6)
+
+
+def _bx(d, x, y, w, h, m, fb, fs):
+    """Uma chave (2 times). m = (a_tla, a_sc, a_win, b_tla, b_sc, b_win)."""
+    a_tla, a_sc, a_win, b_tla, b_sc, b_win = m
+    rh = h / 2
+    for k, (tla, sc, win) in enumerate(((a_tla, a_sc, a_win), (b_tla, b_sc, b_win))):
+        ry = y + k * rh
+        if win:
+            d.rectangle([x, ry, x + w, ry + rh], fill=AZUL_CLARO)
+        cor = NAVY if win else (PRETO if tla else CINZA)
+        d.text((x + 9, ry + rh / 2 - getattr(fb, "size", 20) / 2), tla or "—", font=fb, fill=cor)
+        if sc is not None:
+            s = str(sc)
+            d.text((x + w - 9 - d.textlength(s, font=fs), ry + rh / 2 - getattr(fs, "size", 18) / 2),
+                   s, font=fs, fill=cor)
+    d.rectangle([x, y, x + w, y + h], outline=CINZA, width=1)
+    d.line([x, y + rh, x + w, y + rh], fill=CINZA_CAB, width=1)
+
+
+def bracket_png(left, right, final, champ, terceiro=None):
+    """Árvore TWO-SIDED (converge na final central) → bytes PNG. left/right: 4 colunas de FORA p/
+    DENTRO [R32(8), R16(4), QF(2), SF(1)]; cada chave (a_tla,a_sc,a_win,b_tla,b_sc,b_win).
+    final: chave da final; champ: sigla do campeão; terceiro: chave do 3º ou None."""
+    S = SCALE
+    BW, BH, GAPX, SLOT = 110 * S, 46 * S, 34 * S, 58 * S
+    PADX, TITLE, HEADH = 22 * S, 58 * S, 26 * S
+    n0 = len(left[0])
+    step = BW + GAPX
+    xfin = PADX + 4 * step
+    W = PADX * 2 + 9 * BW + 8 * GAPX
+    top = TITLE + HEADH + 10 * S
+    treeH = n0 * SLOT
+    H = top + treeH + (132 * S if terceiro else 64 * S)
+    img = Image.new("RGB", (W, H), BRANCO)
+    d = ImageDraw.Draw(img)
+    f_t, f_hd = _font(_FONTES_BOLD, 28 * S), _font(_FONTES_BOLD, 16 * S)
+    f_b, f_s = _font(_FONTES_BOLD, 18 * S), _font(_FONTES, 16 * S)
+    lw = max(1, S)
+    d.rectangle([0, 0, W, TITLE], fill=NAVY)
+    _centro(d, (0, 0, W, TITLE), "Chaveamento — sua simulação", f_t, BRANCO)
+    heads = ["32-avos", "Oitavas", "Quartas", "Semi", "Final", "Semi", "Quartas", "Oitavas", "32-avos"]
+    for i, h in enumerate(heads):
+        hx = PADX + i * step
+        _centro(d, (hx, TITLE + 2 * S, hx + BW, TITLE + HEADH), h, f_hd, NAVY)
+
+    def ys_of(cols):
+        ys = [[top + i * SLOT + SLOT / 2 for i in range(len(cols[0]))]]
+        for r in range(1, len(cols)):
+            p = ys[-1]
+            ys.append([(p[2 * j] + p[2 * j + 1]) / 2 for j in range(len(cols[r]))])
+        return ys
+
+    ysl, ysr = ys_of(left), ys_of(right)
+    for r, col in enumerate(left):                        # lado esquerdo cresce p/ a direita
+        cx = PADX + r * step
+        for j, m in enumerate(col):
+            cy = ysl[r][j]
+            _bx(d, cx, cy - BH / 2, BW, BH, m, f_b, f_s)
+            if r < len(left) - 1 and j % 2 == 0:
+                midx, ny = cx + BW + GAPX / 2, ysl[r + 1][j // 2]
+                d.line([cx + BW, cy, midx, cy], fill=CINZA_CAB, width=lw)
+                d.line([cx + BW, ysl[r][j + 1], midx, ysl[r][j + 1]], fill=CINZA_CAB, width=lw)
+                d.line([midx, cy, midx, ysl[r][j + 1]], fill=CINZA_CAB, width=lw)
+                d.line([midx, ny, cx + step, ny], fill=CINZA_CAB, width=lw)
+    for r, col in enumerate(right):                       # lado direito cresce p/ a esquerda
+        cx = xfin + (4 - r) * step
+        for j, m in enumerate(col):
+            cy = ysr[r][j]
+            _bx(d, cx, cy - BH / 2, BW, BH, m, f_b, f_s)
+            if r < len(right) - 1 and j % 2 == 0:
+                midx, ny = cx - GAPX / 2, ysr[r + 1][j // 2]
+                d.line([cx, cy, midx, cy], fill=CINZA_CAB, width=lw)
+                d.line([cx, ysr[r][j + 1], midx, ysr[r][j + 1]], fill=CINZA_CAB, width=lw)
+                d.line([midx, cy, midx, ysr[r][j + 1]], fill=CINZA_CAB, width=lw)
+                d.line([midx, ny, cx - step + BW, ny], fill=CINZA_CAB, width=lw)
+    fcy = top + treeH / 2                                 # final no centro
+    d.line([PADX + 3 * step + BW, fcy, xfin, fcy], fill=CINZA_CAB, width=lw)
+    d.line([xfin + BW, fcy, xfin + step, fcy], fill=CINZA_CAB, width=lw)
+    _bx(d, xfin, fcy - BH / 2, BW, BH, final, f_b, f_s)
+    chy = fcy + BH / 2 + 20 * S                           # campeão (chip dourado, abaixo da final)
+    _centro(d, (xfin, chy - 19 * S, xfin + BW, chy), "campeão", f_hd, OURO_TX)
+    d.rounded_rectangle([xfin, chy, xfin + BW, chy + 38 * S], radius=8 * S,
+                        fill=OURO_BG, outline=OURO, width=2 * S)
+    _centro(d, (xfin, chy, xfin + BW, chy + 38 * S), champ or "—", _font(_FONTES_BOLD, 22 * S), OURO_TX)
+    if terceiro:                                          # disputa de 3º (abaixo do campeão)
+        ty = chy + 38 * S + 32 * S
+        _centro(d, (xfin, ty - 22 * S, xfin + BW, ty), "disputa de 3º", f_hd, CINZA)
+        _bx(d, xfin, ty, BW, BH, terceiro, f_b, f_s)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue()
