@@ -571,10 +571,10 @@ elif pagina == "🎮 Simulador":
                     c1, c2, c3 = st.columns([3, 1, 1])
                     c1.markdown(f"<div style='padding-top:0.6rem'>J{num} · {tn(t1)} x {tn(t2)}</div>",
                                 unsafe_allow_html=True)
-                    g1 = c2.number_input("g1", min_value=0, max_value=99, step=1,
+                    g1 = c2.number_input("g1", min_value=0, max_value=99, step=1, value=None,
                                          key=f"sim_{num}_1",
                                          label_visibility="collapsed", placeholder="-")
-                    g2 = c3.number_input("g2", min_value=0, max_value=99, step=1,
+                    g2 = c3.number_input("g2", min_value=0, max_value=99, step=1, value=None,
                                          key=f"sim_{num}_2",
                                          label_visibility="collapsed", placeholder="-")
                     if g1 is not None and g2 is not None:
@@ -604,10 +604,10 @@ elif pagina == "🎮 Simulador":
                     c1, c2, c3 = st.columns([3, 1, 1])
                     c1.markdown(f"<div style='padding-top:0.6rem'>J{num} · {tn(a)} x {tn(b)}</div>",
                                 unsafe_allow_html=True)
-                    g1 = c2.number_input("g1", min_value=0, max_value=99, step=1,
+                    g1 = c2.number_input("g1", min_value=0, max_value=99, step=1, value=None,
                                          key=f"sim_{num}_1",
                                          label_visibility="collapsed", placeholder="-")
-                    g2 = c3.number_input("g2", min_value=0, max_value=99, step=1,
+                    g2 = c3.number_input("g2", min_value=0, max_value=99, step=1, value=None,
                                          key=f"sim_{num}_2",
                                          label_visibility="collapsed", placeholder="-")
                     if g1 is not None and g2 is not None:
