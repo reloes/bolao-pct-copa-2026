@@ -15,22 +15,13 @@ import os
 import csv
 import json
 import io
-import time
 import tempfile
 import unicodedata
 import urllib.request
 import fixture_copa_2026 as fx
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-_REV = "gabarito-base+sheet-split-v4"   # marca de revisão (força redeploy/pull limpo)
-
-
-def _bust(url):
-    """Anti-cache p/ o CSV publicado do Google (evita CDN servir versão velha do override).
-    Só mexe em http(s); deixa file:// intacto (usado nos testes)."""
-    if not url or not url.startswith(("http://", "https://")):
-        return url
-    return f"{url}{'&' if '?' in url else '?'}_cb={int(time.time())}"
+_REV = "gabarito-base+sheet-snap-v5"   # marca de revisão (força redeploy/pull limpo)
 
 # Snapshot persistente do último gabarito bom da API. Resolve o bug do "jogo some": quando a
 # API falha (429 do rate-limit 10/min compartilhado, ou timeout), em vez de degradar para
@@ -54,6 +45,32 @@ def _write_api_snap(scores, advancers):
         json.dump({"scores": {str(n): list(v) for n, v in scores.items()},
                    "advancers": {str(n): t for n, t in advancers.items()}},
                   open(_API_SNAP, "w", encoding="utf-8"))
+    except Exception:
+        pass
+
+
+# Snapshot do último override BOM da Sheet. Diferente do snapshot da API (que ACUMULA por união,
+# porque resultado terminado não muda): o override PODE mudar/ser removido pelo organizador, então
+# aqui guardamos o último estado completo e SOBRESCREVEMOS a cada leitura boa (não acumula). Serve
+# só para não OSCILAR quando o CSV pisca (timeout) — sem ele, a leitura falha → override some →
+# valor da API ressurge → pontuação fica indo e voltando.
+_OVERRIDE_SNAP = os.path.join(tempfile.gettempdir(), "bolao_pct_override_snapshot.json")
+
+
+def _read_override_snap():
+    try:
+        raw = json.load(open(_OVERRIDE_SNAP, encoding="utf-8"))
+        return ({int(n): tuple(v) for n, v in raw.get("scores", {}).items()},
+                {int(n): t for n, t in raw.get("advancers", {}).items()})
+    except Exception:
+        return {}, {}
+
+
+def _write_override_snap(scores, advancers):
+    try:
+        json.dump({"scores": {str(n): list(v) for n, v in scores.items()},
+                   "advancers": {str(n): t for n, t in advancers.items()}},
+                  open(_OVERRIDE_SNAP, "w", encoding="utf-8"))
     except Exception:
         pass
 
@@ -112,7 +129,7 @@ def load_status(csv_url):
     if not csv_url:
         return True, None
     try:
-        with urllib.request.urlopen(_bust(csv_url), timeout=10) as resp:
+        with urllib.request.urlopen(csv_url, timeout=10) as resp:
             rows = list(csv.DictReader(io.StringIO(resp.read().decode("utf-8"))))
     except Exception:
         return True, None
@@ -153,7 +170,7 @@ def _load_local():
 
 def _load_sheet(csv_url):
     """Google Sheet do organizador (CSV publicado) → (scores, advancers)."""
-    with urllib.request.urlopen(_bust(csv_url), timeout=10) as resp:
+    with urllib.request.urlopen(csv_url, timeout=10) as resp:
         text = resp.read().decode("utf-8")
     return _parse_rows(list(csv.DictReader(io.StringIO(text))))
 
@@ -185,15 +202,20 @@ def load_gabarito_base(api_token=None):
 
 
 def load_sheet_override(csv_url=None):
-    """Camada MANUAL: só a Sheet do organizador (override que VENCE a API). É barata (1 CSV,
-    sem rate-limit) → cache CURTO no app, p/ a correção refletir em segundos. (scores, advancers,
-    fonte|None)."""
+    """Camada MANUAL: só a Sheet do organizador (override que VENCE a API). Barata (1 CSV, sem
+    rate-limit) → cache CURTO no app, p/ a correção refletir em segundos. NÃO degrada: leitura boa
+    SOBRESCREVE o último-bom (reflete add/alteração/remoção do override); leitura que FALHA usa o
+    último-bom (não some) — senão a pontuação oscila quando o CSV pisca. (scores, advancers, fonte|None)."""
     if not csv_url:
         return {}, {}, None
     try:
         s_s, s_a = _load_sheet(csv_url)
+        _write_override_snap(s_s, s_a)                       # leitura boa → vira o último-bom (wholesale)
         return s_s, s_a, (f"Sheet override ({len(s_s)})" if (s_s or s_a) else None)
     except Exception:
+        snap_s, snap_a = _read_override_snap()               # falhou → segura o último-bom (sem oscilar)
+        if snap_s or snap_a:
+            return snap_s, snap_a, f"Sheet override (cache, {len(snap_s)})"
         return {}, {}, "Sheet indisponível"
 
 

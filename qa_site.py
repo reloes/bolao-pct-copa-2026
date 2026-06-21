@@ -237,19 +237,22 @@ check("4x0 × real 4x0 = 6 (exato)", se.score_game_A((4, 0), (4, 0)) == 6)
 check("delta 5x0→4x0 = +2 (não +3)", se.score_game_A((4, 0), (4, 0)) - se.score_game_A((4, 0), (5, 0)) == 2)
 check("gol exato do time que fez 0 conta ganhando (1x0 × 2x0 = 4)", se.score_game_A((1, 0), (2, 0)) == 4)
 check("gol exato do time que fez 0 conta perdendo (0x0 × 0x1 = 1)", se.score_game_A((0, 0), (0, 1)) == 1)
-# (b) anti-cache do CSV: só em http(s); file:// intacto (senão quebra os testes locais)
-check("_bust adiciona _cb em http(s)", "_cb=" in D._bust("https://x/y?a=1"))
-check("_bust não mexe em file://", D._bust("file:///tmp/x.csv") == "file:///tmp/x.csv")
-# (c) override da Sheet VENCE a base por jogo (J38: base 5x0 da API → Sheet 4x0)
+# (b) override da Sheet VENCE a base por jogo, e NÃO oscila quando o CSV pisca (segura o último-bom)
 import tempfile, os as _os
 _p = _os.path.join(tempfile.gettempdir(), "qa_override.csv")
 open(_p, "w", encoding="utf-8").write("jogo,gols1,gols2,quem_passa\n38,4,0,\n17,2,1,\n")
-_so, _sa, _sf = D.load_sheet_override("file://" + _p)
+_so, _sa, _sf = D.load_sheet_override("file://" + _p)        # leitura boa → snapshot do último-bom
 check("Sheet override lê J38 = (4,0)", _so.get(38) == (4, 0), str(_so.get(38)))
-_merged = {**{38: (5, 0), 19: (1, 0)}, **_so}                 # base com 5x0 no 38 (API errada)
-check("merge: Sheet (4,0) VENCE a base (5,0) no J38", _merged.get(38) == (4, 0), str(_merged.get(38)))
-check("merge: jogo não-sobrescrito da base permanece (J19)", _merged.get(19) == (1, 0))
+check("merge: Sheet (4,0) VENCE a base (5,0) no J38", {**{38: (5, 0), 19: (1, 0)}, **_so}.get(38) == (4, 0))
+check("merge: jogo não-sobrescrito da base permanece (J19)", {**{38: (5, 0), 19: (1, 0)}, **_so}.get(19) == (1, 0))
+_so2, _sa2, _sf2 = D.load_sheet_override("file:///___inexistente___.csv")   # CSV falha de propósito
+check("anti-flap: CSV falhou → segura o último-bom (J38 ainda 4,0, não some)", _so2.get(38) == (4, 0), str(_so2.get(38)))
 check("override vazio (sem url) não quebra", D.load_sheet_override(None) == ({}, {}, None))
+for _f in (_p, D._OVERRIDE_SNAP):
+    try:
+        _os.remove(_f)
+    except Exception:
+        pass
 
 print("\n" + ("✅ QA DO SITE PASSOU — pontuação fiel ao oráculo validado"
               if not fails else f"❌ QA FALHOU: {fails}"))
