@@ -72,7 +72,7 @@ def derive_full_adv(scores, advancers=None):
 
 def derive_partial(scores, advancers=None):
     """Como derive_full_adv, mas SEM o gate de 72 grupos: usa a CLASSIFICAÇÃO DE MOMENTO (provisória)
-    dos grupos a partir dos jogos já preenchidos. Os 32-avos saem com os classificados de momento;
+    dos grupos a partir dos jogos já preenchidos. Os 16-avos saem com os classificados de momento;
     as rodadas seguintes ficam indefinidas (None) até haver placar de mata-mata. SÓ p/ EXIBIR o
     chaveamento (não para pontuar — a pontuação segue gated em derive_full_adv)."""
     advancers = advancers or {}

@@ -36,7 +36,7 @@ FLAG = {
     "Portugal": "🇵🇹", "DR Congo": "🇨🇩", "Uzbekistan": "🇺🇿", "Colombia": "🇨🇴",
     "England": "🏴󠁧󠁢󠁥󠁮󠁧󠁿", "Croatia": "🇭🇷", "Ghana": "🇬🇭", "Panama": "🇵🇦",
 }
-FASE_PT = {"R32": "32-avos", "R16": "Oitavas", "QF": "Quartas", "SF": "Semifinal",
+FASE_PT = {"R32": "16-avos", "R16": "Oitavas", "QF": "Quartas", "SF": "Semifinal",
            "3P": "3º lugar", "F": "FINAL"}
 GROUP_INFO = {num: (d, t1, t2) for num, d, _, t1, t2, _ in fx.GROUP_MATCHES}
 KO_INFO = {num: (fase, d, s1, s2) for num, fase, d, _, s1, s2 in fx.KO_MATCHES}
@@ -196,7 +196,7 @@ def _bracket_html(struct):
         center += ("<div style='font-size:10px;opacity:.6;margin-top:8px'>disputa de 3º</div>"
                    f"<div class='bkm'>{row(ter[0], ter[2], ter[4])}{row(ter[1], ter[3], ter[5])}</div>")
     center += "</div>"
-    heads = ["32-avos", "Oitavas", "Quartas", "Semi", "Final", "Semi", "Quartas", "Oitavas", "32-avos"]
+    heads = ["16-avos", "Oitavas", "Quartas", "Semi", "Final", "Semi", "Quartas", "Oitavas", "16-avos"]
     hd = "".join(f"<div>{h}</div>" for h in heads)
     css = ("<style>"
            ".bkwrap{overflow:auto;max-height:600px;border:0.5px solid rgba(128,128,128,.25);border-radius:12px}"
@@ -388,7 +388,7 @@ elif pagina == "⚽ Jogos & Gabarito":
             "Exemplos com o real **Coreia 2x1 Tchéquia**: palpite 2x1 → **6** · 2x0 → **4** "
             "(3 + gols da Coreia) · 1x0 → **3** (só o resultado) · **1x1 → 1** (errou o "
             "resultado, mas cravou o gol da Tcheca) · 0x2 → **0**.\n\n"
-            "**Mata-mata (Seção C):** mesma lógica, com valores por fase (6/3/1 nos 32-avos "
+            "**Mata-mata (Seção C):** mesma lógica, com valores por fase (6/3/1 nos 16-avos "
             "até 30/16/8 na final) — pontua apenas se o **confronto previsto = confronto "
             "real** na mesma fase, e vale **metade** se a posição de grupo dos times estiver "
             "trocada. Prorrogação conta no placar; pênaltis não.")

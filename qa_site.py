@@ -311,7 +311,7 @@ _dp = scoring.derive_partial(_gp_part, {})
 _r32t = [t for n in range(73, 89) for t in _dp["teams"][n]]
 check("derive_partial (parcial): R32 com 32 times reais distintos (classificação de momento)",
       len(_r32t) == 32 and all(_r32t) and len(set(_r32t)) == 32)
-check("derive_partial (parcial): rodadas após os 32-avos ficam indefinidas sem placar de KO",
+check("derive_partial (parcial): rodadas após os 16-avos ficam indefinidas sem placar de KO",
       _dp["teams"][89][0] is None and _dp["champion"] is None)
 
 print("\n" + ("✅ QA DO SITE PASSOU — pontuação fiel ao oráculo validado"

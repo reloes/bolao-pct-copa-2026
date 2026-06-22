@@ -2,7 +2,7 @@
 
 Todo mundo manda os palpites da **Copa inteira no começo** (antes do primeiro jogo): os placares da fase de grupos, o chaveamento completo do mata-mata e os palpites de campeão, vice, 3º e 4º.
 
-> **Novidade de 2026:** a Copa tem **48 seleções**, **12 grupos (A–L)** e **104 jogos**. Classificam-se os **2 primeiros de cada grupo + os 8 melhores terceiros** (32 times no total), e o mata-mata começa nos **32-avos de final**. As regras abaixo são as de sempre, adaptadas a esse formato novo — mantendo o espírito do bolão.
+> **Novidade de 2026:** a Copa tem **48 seleções**, **12 grupos (A–L)** e **104 jogos**. Classificam-se os **2 primeiros de cada grupo + os 8 melhores terceiros** (32 times no total), e o mata-mata começa nos **16-avos de final**. As regras abaixo são as de sempre, adaptadas a esse formato novo — mantendo o espírito do bolão.
 
 ---
 
@@ -26,7 +26,7 @@ Você monta o chaveamento: quem chega em cada fase. Vale a diferença entre **ac
 
 | # | Acertar quem chega em… | Posição certa | Posição errada |
 |---|---|---|---|
-| 1 | **32-avos** (os 32 classificados) — *novo em 2026* | **4** | **2** |
+| 1 | **16-avos** (os 32 classificados) — *novo em 2026* | **4** | **2** |
 | 2 | Oitavas (16) | 6 | 3 |
 | 3 | Quartas de final (8) | 10 | 5 |
 | 4 | Semifinal (4) | 14 | 7 |
@@ -46,7 +46,7 @@ Eventual prorrogação conta como jogo normal (vale o placar **ao final da prorr
 
 | # | Rodada | Placar exato | Vencedor/empate | Gol de um time |
 |---|---|---|---|---|
-| 10 | **32-avos** — *novo em 2026* | **6** | **3** | **1** |
+| 10 | **16-avos** — *novo em 2026* | **6** | **3** | **1** |
 | 11 | Oitavas | 8 | 4 | 2 |
 | 12 | Quartas | 14 | 8 | 4 |
 | 13 | Semi | 20 | 10 | 6 |
@@ -74,7 +74,7 @@ viii. acerto de um participante do jogo de disputa do terceiro lugar
 ix. acerto do maior número de semifinalistas
 x. acerto do maior número de classificados às quartas
 xi. acerto do maior número de classificados às oitavas
-xii. acerto do maior número de classificados aos **32-avos** — *novo em 2026*
+xii. acerto do maior número de classificados aos **16-avos** — *novo em 2026*
 
 > Nos critérios acima, o acerto **na posição certa** na primeira fase leva vantagem sobre na posição errada.
 
@@ -86,11 +86,11 @@ xiii. pontuação nos jogos dos **Estados Unidos** (seleção anfitriã) na prim
 
 ## O que mudou de 2022 → 2026 (resumo das alterações)
 
-1. **Formato da Copa:** 32→**48 seleções**, 8→**12 grupos**, 64→**104 jogos**. Classificam 2 por grupo **+ 8 melhores terceiros** (32 times); o mata-mata começa nos **32-avos**.
+1. **Formato da Copa:** 32→**48 seleções**, 8→**12 grupos**, 64→**104 jogos**. Classificam 2 por grupo **+ 8 melhores terceiros** (32 times); o mata-mata começa nos **16-avos**.
 2. **Fase de grupos (A):** mesma pontuação (6 / 3 / +1), agora aplicada a **72 jogos** (eram 48).
-3. **Classificados (B):** acrescentado o degrau **"classificados aos 32-avos" (4 / 2)**. A "posição certa" passou a incluir o **3º-que-avança**. Todos os demais valores foram **mantidos de 2022**.
-4. **Placares do mata-mata (C):** acrescentado o degrau **"32-avos" (6 / 3 / 1)**. Demais valores **mantidos**.
-5. **Desempate (D):** acrescentado o critério **"classificados aos 32-avos"**; o critério do anfitrião passou de **Catar → Estados Unidos**. **Removido** o critério do "Loesão" (era brincadeira).
+3. **Classificados (B):** acrescentado o degrau **"classificados aos 16-avos" (4 / 2)**. A "posição certa" passou a incluir o **3º-que-avança**. Todos os demais valores foram **mantidos de 2022**.
+4. **Placares do mata-mata (C):** acrescentado o degrau **"16-avos" (6 / 3 / 1)**. Demais valores **mantidos**.
+5. **Desempate (D):** acrescentado o critério **"classificados aos 16-avos"**; o critério do anfitrião passou de **Catar → Estados Unidos**. **Removido** o critério do "Loesão" (era brincadeira).
 6. **Filosofia de calibração:** **mínima** — todos os valores de 2022 preservados; só foram inseridos os degraus exigidos pelo novo formato.
 
 > **Confirmado (Renato):** anfitrião do critério xiii = **Estados Unidos**.

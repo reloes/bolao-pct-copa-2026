@@ -100,7 +100,7 @@ def _ko_field_score(m):
 
 def parse_ko(matches, group_scores):
     """{num:(g1,g2)} e {num: advancer_en} dos jogos de MATA-MATA FINISHED, mapeados aos slots
-    73-104. Casa por par de times — os 32-avos vêm da derivação dos grupos (matriz oficial) e
+    73-104. Casa por par de times — os 16-avos vêm da derivação dos grupos (matriz oficial) e
     as fases seguintes da propagação dos vencedores REAIS. 'quem passou' (inclui pênaltis) vem
     do campo `winner` da API. Só roda com os 72 grupos completos."""
     if len(group_scores) != 72:

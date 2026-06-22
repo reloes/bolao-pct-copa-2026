@@ -140,7 +140,7 @@ def section_B(palpite, real):
 # ============================ Seção C — placares do mata-mata ============================
 SCORE_C = {}
 for _n in range(73, 89):
-    SCORE_C[_n] = (6, 3, 1)        # 32-avos
+    SCORE_C[_n] = (6, 3, 1)        # 16-avos
 for _n in range(89, 97):
     SCORE_C[_n] = (8, 4, 2)        # Oitavas
 for _n in range(97, 101):

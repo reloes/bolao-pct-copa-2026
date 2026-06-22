@@ -4,7 +4,7 @@ Motor de derivação do bolão (fundação da apuração e da planilha integrada
 A partir dos PLACARES dos 72 jogos de grupo, deriva:
   - classificação 1º–4º de cada grupo (desempate FIFA: pontos → confronto direto → saldo → gols);
   - os 8 melhores terceiros (pontos → saldo → gols);
-  - os confrontos dos 32-avos, usando a matriz oficial (fifa_thirds_matrix.json).
+  - os confrontos dos 16-avos, usando a matriz oficial (fifa_thirds_matrix.json).
 
 Observação de fidelidade: fair-play e ranking FIFA (últimos critérios) não se aplicam a
 palpites (não há cartões previstos); o desempate final usa uma ordem estável determinística.
@@ -21,7 +21,7 @@ MATRIX = json.load(open(os.path.join(HERE, "fifa_thirds_matrix.json")))["matriz"
 COL_WINNER = ["A", "B", "D", "E", "G", "I", "K", "L"]
 COL_MATCH = ["M79", "M85", "M81", "M74", "M82", "M77", "M87", "M80"]
 
-# confrontos diretos dos 32-avos (24 vagas de 1º/2º), do regulamento (pág. 23)
+# confrontos diretos dos 16-avos (24 vagas de 1º/2º), do regulamento (pág. 23)
 DIRECT_R32 = [
     ("M73", ("2", "A"), ("2", "B")), ("M75", ("1", "F"), ("2", "C")),
     ("M76", ("1", "C"), ("2", "F")), ("M78", ("2", "E"), ("2", "I")),
@@ -80,7 +80,7 @@ def rank_group(teams, matches):
 def derive(scores, partial=False):
     """scores: {match_num: (g1,g2)} dos 72 jogos de grupo. partial=True usa só os jogos já
     preenchidos (classificação DE MOMENTO) em vez de exigir os 6 de cada grupo.
-    Retorna dict com standings, terceiros, combinação e confrontos dos 32-avos."""
+    Retorna dict com standings, terceiros, combinação e confrontos dos 16-avos."""
     standings = {}; stats = {}; thirds = []
     for L, teams in fx.GROUPS.items():
         ms = [(t1, t2, *scores[num]) for num, t1, t2 in GROUP_FIXT[L] if not partial or num in scores]
@@ -123,7 +123,7 @@ if __name__ == "__main__":
                                      for m in [COL_MATCH[COL_WINNER.index(w)]]})
     teams_r32 = [t for pair in d["r32"].values() for t in pair]
     print("\nVerificações:")
-    print("  16 jogos de 32-avos:", len(d["r32"]) == 16)
+    print("  16 jogos de 16-avos:", len(d["r32"]) == 16)
     print("  32 times distintos:", len(set(teams_r32)) == 32)
     same = [(m, a, b) for m, (a, b) in d["r32"].items() if _t2g[a] == _t2g[b]]
     print("  nenhum confronto do mesmo grupo:", not same, same[:3])

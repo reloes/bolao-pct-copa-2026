@@ -227,7 +227,7 @@ def bracket_png(left, right, final, champ, terceiro=None):
     lw = max(1, S)
     d.rectangle([0, 0, W, TITLE], fill=NAVY)
     _centro(d, (0, 0, W, TITLE), "Chaveamento — sua simulação", f_t, BRANCO)
-    heads = ["32-avos", "Oitavas", "Quartas", "Semi", "Final", "Semi", "Quartas", "Oitavas", "32-avos"]
+    heads = ["16-avos", "Oitavas", "Quartas", "Semi", "Final", "Semi", "Quartas", "Oitavas", "16-avos"]
     for i, h in enumerate(heads):
         hx = PADX + i * step
         _centro(d, (hx, TITLE + 2 * S, hx + BW, TITLE + HEADH), h, f_hd, NAVY)
