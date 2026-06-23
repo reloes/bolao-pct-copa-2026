@@ -18,6 +18,7 @@ import score_engine as se
 
 GROUP_NUMS = se.GROUP_NUMS
 KO_SLOTS = se.KO_SLOTS
+_KO_FASE = {num: fase for num, fase, _, _, _, _ in fx.KO_MATCHES}   # nº do jogo → fase (R32/R16/QF/SF/3P/F)
 
 
 # ---------------------------------------------------------------- derivação com pênaltis
@@ -252,3 +253,40 @@ def ranking(palps, real_scores, real_advancers, penalidades):
     for r in rows:
         r["pos"] = 1 + sum(1 for o in rows if o["total"] > r["total"])      # posição: só o total
     return rows
+
+
+FASES_CHEIO = ("GRUPOS", "R32", "R16", "QF", "SF", "3P", "F")   # ordem das fases p/ o placar exato
+
+
+def acertos_cheios(palps, real, real_advancers=None):
+    """INFORMATIVO (não pontua): conta, por palpiteiro, quantos jogos ele CRAVOU O PLACAR EXATO,
+    por fase. Grupos: palpite[n] == real[n]. Mata-mata: o confronto previsto = o confronto REAL
+    (mesmo par de times) E o placar exato (orientado aos times reais). Devolve
+    {nome: {'GRUPOS','R32','R16','QF','SF','3P','F': int}} (mata-mata só conta com os 72 grupos reais)."""
+    rd = derive_full_adv(real, real_advancers or {})            # bracket real (None até os 72 grupos)
+    out = {}
+    for p in palps:
+        c = {k: 0 for k in FASES_CHEIO}
+        for n in GROUP_NUMS:                                    # grupos: placar idêntico
+            rg, pg = real.get(n), p["scores"].get(n)
+            if rg is not None and pg is not None and tuple(pg) == tuple(rg):
+                c["GRUPOS"] += 1
+        if rd:                                                  # mata-mata: confronto real + placar exato
+            pdv = derive_full_adv(p["scores"], p["advancers"])
+            if pdv:
+                for n in range(73, 105):
+                    rg, pg = real.get(n), p["scores"].get(n)
+                    if not (se._validpair(rg) and se._validpair(pg)):
+                        continue
+                    rT, pT = rd["teams"].get(n), pdv["teams"].get(n)
+                    if not (rT and rT[0] and rT[1] and pT and pT[0] and pT[1]):
+                        continue
+                    same = (pT[0] == rT[0] and pT[1] == rT[1])
+                    swap = (pT[0] == rT[1] and pT[1] == rT[0])
+                    if not (same or swap):
+                        continue
+                    pA, pB = (pg[0], pg[1]) if same else (pg[1], pg[0])
+                    if pA == rg[0] and pB == rg[1]:
+                        c[_KO_FASE[n]] += 1
+        out[p["nome"]] = c
+    return out

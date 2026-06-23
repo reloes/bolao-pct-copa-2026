@@ -314,6 +314,24 @@ check("derive_partial (parcial): R32 com 32 times reais distintos (classificaç�
 check("derive_partial (parcial): rodadas após os 16-avos ficam indefinidas sem placar de KO",
       _dp["teams"][89][0] is None and _dp["champion"] is None)
 
+# ---------- 10) Acertos de PLACAR EXATO por fase (informativo)
+print("\n10) Acertos de placar exato por fase (scoring.acertos_cheios):")
+_pc = byname[DECISIVOS[0]]
+_acs = scoring.acertos_cheios(PALPS, _pc["scores"], _pc["advancers"])   # real = palpite do próprio decisivo
+_self = _acs[_pc["nome"]]
+check(f"{_pc['nome']} × si mesmo: GRUPOS = 72 (cravou todos os grupos)", _self["GRUPOS"] == 72, str(_self["GRUPOS"]))
+check(f"{_pc['nome']} × si mesmo: total = 104 (todos os jogos exatos, bracket completo)",
+      sum(_self.values()) == 104, str(sum(_self.values())))
+check("chaves de fase = GRUPOS + R32/R16/QF/SF/3P/F", set(_self) == set(scoring.FASES_CHEIO))
+_acp = scoring.acertos_cheios(PALPS, {1: (2, 0), 2: (2, 1)}, {})         # real só com 2 grupos
+check("real parcial: mata-mata todo 0 (sem os 72 grupos reais não há bracket real)",
+      all(sum(v[k] for k in ("R32", "R16", "QF", "SF", "3P", "F")) == 0 for v in _acp.values()))
+check("real parcial: quem cravou J1/J2 conta em GRUPOS", any(v["GRUPOS"] > 0 for v in _acp.values()))
+# placar exato NÃO conta resultado-certo-placar-errado (ex.: real 2x0, palpite 1x0 não é cheio)
+_acn = scoring.acertos_cheios(PALPS, {1: (99, 98)}, {})                  # placar improvável: ninguém crava
+check("placar exato exige o placar IDÊNTICO (99x98 → ninguém crava o J1)",
+      all(v["GRUPOS"] == 0 for v in _acn.values()))
+
 print("\n" + ("✅ QA DO SITE PASSOU — pontuação fiel ao oráculo validado"
               if not fails else f"❌ QA FALHOU: {fails}"))
 sys.exit(0 if not fails else 1)

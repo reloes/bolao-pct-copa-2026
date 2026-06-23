@@ -272,6 +272,21 @@ if pagina == "🏅 Ranking":
     with cz2.expander("ver/copiar o texto da mensagem (com emojis — cole no zap)"):
         st.code(zap, language=None)
 
+    with st.expander("🎯 Placar exato por fase (informativo — não conta pro ranking)"):
+        st.caption("Quantos jogos cada um **cravou o placar exato**, por fase — só curiosidade. "
+                   "As fases do mata-mata preenchem quando os grupos terminarem.")
+        _ac = scoring.acertos_cheios(PALPS, REAL, RADV)
+        _cols = [("GRUPOS", "Grupos"), ("R32", FASE_PT["R32"]), ("R16", FASE_PT["R16"]),
+                 ("QF", FASE_PT["QF"]), ("SF", "Semi"), ("3P", "3º"), ("F", "Final")]
+        _lin = []
+        for _nome, _c in _ac.items():
+            _tot = sum(_c.values())
+            _pos = 1 + sum(1 for _cc in _ac.values() if sum(_cc.values()) > _tot)
+            _lin.append({"Pos": _pos, "Palpiteiro": _nome,
+                         **{h: _c[code] for code, h in _cols}, "Total": _tot})
+        _lin.sort(key=lambda r: (r["Pos"], r["Palpiteiro"]))
+        st.dataframe(pd.DataFrame(_lin), width="stretch", hide_index=True)
+
     st.subheader("Detalhe por palpiteiro")
     sel = st.selectbox("Palpiteiro", [r["nome"] for r in rows])
     r = next(x for x in rows if x["nome"] == sel)
