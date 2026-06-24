@@ -332,6 +332,23 @@ _acn = scoring.acertos_cheios(PALPS, {1: (99, 98)}, {})                  # placa
 check("placar exato exige o placar IDÊNTICO (99x98 → ninguém crava o J1)",
       all(v["GRUPOS"] == 0 for v in _acn.values()))
 
+# ---------- 11) Comparativo de grupos: NEGRITO nos classificados (1º/2º sempre; 3º só se no combo)
+print("\n11) Comparativo de grupos — negrito nos classificados (regra do _comp_grupo_html):")
+_full = {q["nome"]: scoring.derive_full_adv(q["scores"], q["advancers"]) for q in PALPS}
+for _nome, _d in _full.items():
+    assert _d is not None, f"{_nome} sem derivação (grupos incompletos)"
+    _bold = set()                                          # times marcados em negrito nos 12 grupos
+    for _L in "ABCDEFGHIJKL":
+        _ordem = _d["standings"][_L]
+        _leva3 = _L in _d["combo"]
+        for _i in range(4):
+            if _i in (0, 1) or (_i == 2 and _leva3):       # regra idêntica à do app
+                _bold.add(_ordem[_i])
+    check(f"{_nome}: 32 células em negrito (24 do 1º/2º + 8 melhores 3ºs)", len(_bold) == 32, str(len(_bold)))
+    check(f"{_nome}: negrito == campo dos 16-avos do palpite (R32)", _bold == _d["R32"])
+    check(f"{_nome}: exatamente 8 terceiros em negrito (= |combo|)",
+          sum(1 for _L in "ABCDEFGHIJKL" if _L in _d["combo"]) == 8)
+
 print("\n" + ("✅ QA DO SITE PASSOU — pontuação fiel ao oráculo validado"
               if not fails else f"❌ QA FALHOU: {fails}"))
 sys.exit(0 if not fails else 1)

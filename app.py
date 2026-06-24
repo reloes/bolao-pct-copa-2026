@@ -47,6 +47,36 @@ def tn(team):
     return f"{FLAG.get(team, '')} {PT[team]}".strip() if team else "—"
 
 
+def _comp_grupo_html(L, palps, full):
+    """Tabela do Comparativo de grupos para o grupo L com os classificados de cada palpiteiro
+    em NEGRITO: 1º e 2º sempre (passam direto); o 3º só fica em negrito quando entra no pool
+    dos 8 melhores terceiros daquele palpite (d['combo'] = letras dos grupos cujo 3º avança)."""
+    cab = "".join(f"<th>{h}</th>" for h in ("Palpiteiro", "1º", "2º", "3º", "4º"))
+    linhas = []
+    for q in palps:
+        nome = q["nome"]
+        d = full.get(nome)
+        if not d:                       # grupos incompletos (não ocorre com palpites congelados)
+            continue
+        ordem = d["standings"][L]
+        leva3 = L in d["combo"]         # o 3º deste grupo entra nos 8 melhores terceiros do palpite?
+        tds = [f'<td class="nm">{nome}</td>']
+        for i in range(4):
+            classifica = i in (0, 1) or (i == 2 and leva3)
+            tds.append(f'<td class="{"cl" if classifica else ""}">{tn(ordem[i])}</td>')
+        linhas.append("<tr>" + "".join(tds) + "</tr>")
+    return ("<style>"
+            "table.cmpg{border-collapse:collapse;width:100%;font-size:.9rem}"
+            "table.cmpg th,table.cmpg td{padding:5px 10px;text-align:left;"
+            "border-bottom:1px solid rgba(128,128,128,.2);white-space:nowrap}"
+            "table.cmpg th{font-weight:700;border-bottom:2px solid rgba(128,128,128,.45)}"
+            "table.cmpg td.cl{font-weight:700}"
+            "table.cmpg td.nm{opacity:.7}"
+            "</style>"
+            f'<table class="cmpg"><thead><tr>{cab}</tr></thead>'
+            f"<tbody>{''.join(linhas)}</tbody></table>")
+
+
 @st.cache_data(ttl=3600)   # palpites são congelados
 def _palpites():
     return D.load_palpites()
@@ -361,17 +391,15 @@ elif pagina == "📋 Palpites":
                     st.markdown("  \n".join(linhas))
                     st.divider()
     with t_comp:
-        st.caption("A classificação prevista por cada palpiteiro, grupo a grupo, lado a lado "
-                   "(o 3º é quem disputa a repescagem dos 8 melhores terceiros).")
-        all_stand = {q["nome"]: scoring.derive_full_adv(q["scores"], q["advancers"])["standings"]
-                     for q in PALPS}
+        st.caption("A classificação prevista por cada palpiteiro, grupo a grupo, lado a lado. "
+                   "**Em negrito, os classificados** de cada um — 1º e 2º sempre avançam; o "
+                   "**3º fica em negrito** só quando entra no pool dos 8 melhores terceiros "
+                   "daquele palpite.")
+        full = {q["nome"]: scoring.derive_full_adv(q["scores"], q["advancers"]) for q in PALPS}
         tabs_g = st.tabs([f"Grupo {L}" for L in "ABCDEFGHIJKL"])
         for L, tg in zip("ABCDEFGHIJKL", tabs_g):
             with tg:
-                df_c = pd.DataFrame([{"Palpiteiro": nome,
-                                      **{f"{i+1}º": tn(stand[L][i]) for i in range(4)}}
-                                     for nome, stand in all_stand.items()])
-                st.dataframe(df_c, width="stretch", hide_index=True)
+                st.html(_comp_grupo_html(L, PALPS, full))
     with t_mata:
         for fase_key in ("R32", "R16", "QF", "SF", "3P", "F"):
             nums = [n for n, (f_, *_), in KO_INFO.items() if f_ == fase_key]
