@@ -276,6 +276,11 @@ if pagina == "🏅 Ranking":
         "C · Mata-mata": r["C"],
     } for r in rows])
     st.dataframe(df, width="stretch", hide_index=True)
+    if rows and rows[0].get("b_parcial") and JOGADOS:
+        _nf = scoring.n_grupos_fechados(REAL)
+        st.caption(f"ℹ️ **Seção B parcial** ({_nf}/12 grupos fechados): o **1º e o 2º** de cada grupo "
+                   "já encerrado **já contam**; os **8 melhores 3ºs** entram quando os 12 grupos "
+                   "fecharem, e os degraus de mata-mata abrem com os jogos.")
     if not JOGADOS:
         st.info("Nenhum resultado lançado ainda — todos zerados. O ranking nasce com o 1º jogo.")
     pen_rows = [r for r in rows if r["anulados"]]
@@ -327,6 +332,9 @@ if pagina == "🏅 Ranking":
     c2.metric("Seção A", f"{r['A'] + r['descontado']:g}")   # bruto (A+B+C = Bruto; punição no Líquido)
     c3.metric("Seção B", f"{r['B']:g}")
     c4.metric("Seção C", f"{r['C']:g}")
+    if r.get("b_parcial") and JOGADOS:
+        st.caption("Seção B **parcial**: contam só os classificados (1º/2º) dos grupos já fechados; "
+                   "os 8 melhores 3ºs e os degraus de mata-mata entram depois.")
     psel = next((p for p in PALPS if p["nome"] == sel), None)
     ja = []
     for n in JOGADOS:

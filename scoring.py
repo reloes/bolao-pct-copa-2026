@@ -136,11 +136,52 @@ def section_A(palpite, real, anulados=()):
     return sum(per.values()), per, desc
 
 
-def section_B(pd, rd, real_groups_complete):
+def n_grupos_fechados(scores):
+    """Quantos dos 12 grupos têm os 6 jogos preenchidos/válidos (1º/2º já definidos)."""
+    return sum(1 for L in fx.GROUPS
+               if all(se._validpair(scores.get(n)) for n, _, _ in eng.GROUP_FIXT[L]))
+
+
+def _real_r32_decided(real_scores, rd):
+    """{time: posição 1/2/3} dos times JÁ CONFIRMADOS nos 16-avos pela REALIDADE.
+    - rd pronto (12 grupos reais fechados): todos os 32, com posição (inclui os 8 melhores 3ºs, pos 3).
+    - senão: 1º (pos 1) e 2º (pos 2) de cada grupo real JÁ FECHADO (6/6 jogos válidos). 3ºs ficam
+      PENDENTES (dependem dos 8 melhores) e 4ºs ficam de fora — nenhum dos dois entra aqui.
+    A posição 1º/2º de um grupo fechado é intra-grupo (Art.13) e não muda com os outros grupos."""
+    if rd:
+        return {t: rd["pos"][t] for t in rd["R32"]}
+    decided = {}
+    for L, teams in fx.GROUPS.items():
+        nums = [n for n, _, _ in eng.GROUP_FIXT[L]]
+        if all(se._validpair(real_scores.get(n)) for n in nums):     # grupo L inteiro jogado
+            ms = [(t1, t2, *real_scores[n]) for n, t1, t2 in eng.GROUP_FIXT[L]]
+            order, *_ = eng.rank_group(teams, ms)
+            decided[order[0]] = 1
+            decided[order[1]] = 2
+    return decided
+
+
+_B1_FULL, _B1_HALF = next((f, h) for k, _, f, h in se.SET_STEPS_B if k == 1)   # 4 / 2 (sem hardcode)
+
+
+def section_B(pd, rd, real_scores):
+    """(total, {degrau: pts}). Degrau 1 (16-avos) é PARCIAL: credita os classificados confirmados
+    conforme os grupos REAIS fecham — 1º/2º de cada grupo fechado já contam; os 8 melhores 3ºs só
+    entram quando os 12 grupos fecharem (rd pronto). Com rd pronto, colapsa no cálculo original
+    (paridade × oráculo preservada). pd está sempre completo (palpite congelado). Degraus 2–9 seguem
+    gated no bracket real completo (precisam de resultados de mata-mata)."""
     per = {}
+    per[1] = 0                                                       # 16-avos: avaliação incremental
+    if pd:
+        dec = _real_r32_decided(real_scores, rd)
+        for t in pd["R32"]:
+            if t in dec:
+                per[1] += _B1_FULL if pd["pos"].get(t) == dec[t] else _B1_HALF
     for key, phase, full, half in se.SET_STEPS_B:
+        if key == 1:
+            continue
         pts = 0
-        if pd and rd and (key != 1 or real_groups_complete):
+        if pd and rd:
             rset = rd[phase]
             for t in pd[phase]:
                 if t in rset:
@@ -232,14 +273,14 @@ def avaliar(palp, real_scores, real_advancers, penalidades):
     anulados = tuple(penalidades.get(palp["nome"], {}).get("jogos_anulados_secao_A", ()))
     pd = derive_full_adv(palp["scores"], palp["advancers"])
     rd = derive_full_adv(real_scores, real_advancers)
-    rgc = se._group_complete(real_scores)
     A, perA, desc = section_A(palp["scores"], real_scores, anulados)
-    B, perB = section_B(pd, rd, rgc)
+    B, perB = section_B(pd, rd, real_scores)
     C, perC, perCn = section_C(pd, rd, palp["scores"], real_scores)
     Dkey, crit = section_D(pd, rd, palp["scores"], real_scores)
     return {"nome": palp["nome"], "A": A, "B": B, "C": C, "total": A + B + C,
             "dkey": Dkey, "crit": crit, "perA": perA, "perB": perB, "perC": perC,
-            "perCn": perCn, "anulados": anulados, "descontado": desc, "pd": pd}
+            "perCn": perCn, "anulados": anulados, "descontado": desc, "pd": pd,
+            "b_parcial": rd is None}      # B só com 16-avos parciais (faltam 3ºs/mata-mata)
 
 
 def ranking(palps, real_scores, real_advancers, penalidades):

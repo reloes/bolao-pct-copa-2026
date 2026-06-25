@@ -65,7 +65,7 @@ for nome, p_sc, r_sc in cenarios:
     pd_ = scoring.derive_full_adv(p_sc, {})
     rd_ = scoring.derive_full_adv(r_sc, {})
     okA = scoring.section_A(p_sc, r_sc)[0] == se.section_A(p_sc, r_sc)[0]
-    okB = scoring.section_B(pd_, rd_, se._group_complete(r_sc))[:1] == se.section_B(p_sc, r_sc)[:1]
+    okB = scoring.section_B(pd_, rd_, r_sc)[:1] == se.section_B(p_sc, r_sc)[:1]
     okC = scoring.section_C(pd_, rd_, p_sc, r_sc)[0] == se.section_C(p_sc, r_sc)[0]
     okD = scoring.section_D(pd_, rd_, p_sc, r_sc)[0] == se.section_D(p_sc, r_sc)[0]
     npar += all((okA, okB, okC, okD))
@@ -348,6 +348,78 @@ for _nome, _d in _full.items():
     check(f"{_nome}: negrito == campo dos 16-avos do palpite (R32)", _bold == _d["R32"])
     check(f"{_nome}: exatamente 8 terceiros em negrito (= |combo|)",
           sum(1 for _L in "ABCDEFGHIJKL" if _L in _d["combo"]) == 8)
+
+# ---------- 12) Seção B PARCIAL: degrau 1 (16-avos) creditado conforme os grupos fecham
+print("\n12) Seção B parcial — degrau 1 incremental (1º/2º por grupo fechado; 3ºs só ao fechar tudo):")
+_eng = scoring.eng
+_GFIX = {L: [n for n, _, _ in _eng.GROUP_FIXT[L]] for L in scoring.fx.GROUPS}   # nºs de jogo por grupo
+_GORD = list("ABCDEFGHIJKL")
+_PD = {q["nome"]: scoring.derive_full_adv(q["scores"], {}) for q in PALPS}      # brackets dos palpites (completos)
+
+
+def _decided_ref(real_sc):
+    """Referência INDEPENDENTE: {time: pos 1/2/3} confirmados nos 16-avos pela realidade
+    (1º/2º de grupos fechados; + 8 melhores 3ºs se TODOS fecharam). Não usa _real_r32_decided."""
+    if se._group_complete(real_sc):
+        rd = scoring.derive_full_adv(real_sc, {})
+        return {t: rd["pos"][t] for t in rd["R32"]}
+    dec = {}
+    for L, teams in scoring.fx.GROUPS.items():
+        if all(se._validpair(real_sc.get(n)) for n in _GFIX[L]):
+            order, *_ = _eng.rank_group(teams, [(t1, t2, *real_sc[n]) for n, t1, t2 in _eng.GROUP_FIXT[L]])
+            dec[order[0]] = 1
+            dec[order[1]] = 2
+    return dec
+
+
+def _b1_site(pd, real_sc):
+    return scoring.section_B(pd, scoring.derive_full_adv(real_sc, {}), real_sc)[1][1]
+
+
+def _b1_ref(pd, real_sc):                                  # 4 = posição certa · 2 = time certo, posição errada
+    dec = _decided_ref(real_sc)
+    return sum(4 if pd["pos"].get(t) == dec[t] else 2 for t in pd["R32"] if t in dec)
+
+
+# (a) paridade site × referência independente em TODA a trajetória de revelação + monotonicidade
+_npar = _ntot = 0
+_mono_ok = True
+for rp in PALPS:                                           # cada palpite congelado como "gabarito real"
+    _prev = {q["nome"]: 0 for q in PALPS}
+    for k in range(1, 13):                                 # revela grupos A..k (incremental)
+        part = {n: rp["scores"][n] for L in _GORD[:k] for n in _GFIX[L]}
+        for q in PALPS:
+            pd = _PD[q["nome"]]
+            site, ref = _b1_site(pd, part), _b1_ref(pd, part)
+            _ntot += 1
+            _npar += (site == ref)
+            if site < _prev[q["nome"]]:
+                _mono_ok = False
+            _prev[q["nome"]] = site
+check(f"degrau-1 parcial == referência independente em {_npar}/{_ntot} (8 reais × 12 passos × 8 palpites)",
+      _npar == _ntot)
+check("monotonicidade: degrau-1 nunca decresce ao fechar mais grupos", _mono_ok)
+
+# (b) convergência/invariante: 12 grupos reais fechados → degrau-1 site == oráculo (independente)
+_okconv = all(_b1_site(_PD[q["nome"]], rp["scores"]) == se.section_B(q["scores"], rp["scores"])[1][1]
+              for rp in PALPS for q in PALPS)
+check("convergência: grupos completos → degrau-1 site == oráculo (8×8 pares)", _okconv)
+
+# (c) fase parcial só credita 1º/2º: 11 grupos revelados (falta L) → rd None, 22 decididos, todos pos 1/2
+_p11 = {n: PALPS[0]["scores"][n] for L in _GORD[:11] for n in _GFIX[L]}
+check("11 grupos: gabarito ainda incompleto (rd None)", scoring.derive_full_adv(_p11, {}) is None)
+_dec11 = scoring._real_r32_decided(_p11, None)
+check("11 grupos: exatamente 22 classificados decididos (11×2)", len(_dec11) == 22, str(len(_dec11)))
+check("11 grupos: todos decididos são 1º ou 2º (nenhum 3º pendente)", set(_dec11.values()) == {1, 2})
+
+# (d) caso concreto: só grupo A jogado (2x1) → real-1º/2º entram, 3º/4º ficam de fora
+_realA = {n: (2, 1) for n in _GFIX["A"]}
+_decA = scoring._real_r32_decided(_realA, None)
+_ordA, *_ = _eng.rank_group(scoring.fx.GROUPS["A"], [(t1, t2, 2, 1) for _, t1, t2 in _eng.GROUP_FIXT["A"]])
+check("grupo A só: decididos = exatamente {1º:1, 2º:2} reais (3º/4º fora)",
+      _decA == {_ordA[0]: 1, _ordA[1]: 2})
+check("grupo A só: nenhum palpiteiro pontua por time fora dos decididos",
+      all(set(t for t in _PD[q["nome"]]["R32"] if t in _decA) <= set(_decA) for q in PALPS))
 
 print("\n" + ("✅ QA DO SITE PASSOU — pontuação fiel ao oráculo validado"
               if not fails else f"❌ QA FALHOU: {fails}"))
