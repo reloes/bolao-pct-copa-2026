@@ -349,6 +349,29 @@ if pagina == "🏅 Ranking":
         st.caption("Pontos por jogo já realizado (Seção A):")
         st.dataframe(pd.DataFrame(ja, columns=["Jogo", "Resultado", "Palpite", "Pontos"]),
                      width="stretch", hide_index=True)
+
+    # conferência dos classificados (Seção B · 16-avos): 1 linha por classificado já confirmado
+    rd_real = scoring.derive_full_adv(REAL, RADV)
+    dec = scoring._real_r32_decided(REAL, rd_real)        # {time: posição real 1/2/3 confirmada}
+    if dec and psel:
+        pdv = r["pd"]
+        t2g = {t: L for L, ts in fx.GROUPS.items() for t in ts}
+        linhas_b = []
+        for t in sorted(dec, key=lambda x: (t2g[x], dec[x])):
+            classif = t in pdv["R32"]                     # o palpiteiro previu este time classificado?
+            ppos = pdv["pos"].get(t)                      # posição que o palpiteiro deu a ele no grupo
+            pts = (scoring._B1_FULL if ppos == dec[t] else scoring._B1_HALF) if classif else 0
+            linhas_b.append((f"{tn(t)} — {dec[t]}º do {t2g[t]}",
+                             f"{ppos}º do {t2g[t]}" + ("" if classif else " — não classificou"),
+                             f"{pts:g}"))
+        st.caption("Conferência dos classificados (Seção B · 16-avos) — **4** = posição certa · "
+                   "**2** = time certo, posição errada · **0** = não previu classificado:")
+        st.dataframe(pd.DataFrame(linhas_b, columns=["Classificado (real)", "Seu palpite", "Pontos"]),
+                     width="stretch", hide_index=True)
+        if rd_real is not None:
+            st.caption("Inclui os 8 melhores 3ºs (grupos encerrados). Oitavas→final somam à Seção B "
+                       "conforme o mata-mata avança.")
+
     with st.expander("Critérios de desempate (Seção D, i–xiii)"):
         st.caption("Usados apenas em caso de empate no total — i é o mais importante.")
         st.dataframe(pd.DataFrame([{**{"critério": k}, **{"valor": v}}
