@@ -181,6 +181,95 @@ def palpites_grid_png(dia, jogos):
     return buf.getvalue()
 
 
+# ===================== Imagem do dia no MATA-MATA (grade por concorrência) =====================
+# Nos grupos todos apostam no MESMO confronto → cor 1-X-2. No mata-mata cada um prevê um confronto
+# DIFERENTE por vaga, então a grade colore pela CONCORRÊNCIA (mesma ideia da coluna "Acerto"):
+# 🟢 cheia (par certo + posições certas) · 🟡 metade (par certo, posição trocada) · cinza fora.
+CHEIA_BG = (150, 210, 165)     # verde — concorrendo cheio
+META_BG = (246, 208, 130)      # âmbar — concorrendo pela metade
+FORA_BG = (233, 235, 238)      # cinza claro — errou o confronto
+INDEF_BG = (246, 247, 249)     # confronto real ainda indefinido
+_STATUS_BG = {"cheia": CHEIA_BG, "metade": META_BG, "fora": FORA_BG, None: INDEF_BG}
+
+
+def mata_grid_png(dia, jogos):
+    """Grade do dia no mata-mata → bytes PNG. Cor = concorrência de cada um pelo resultado.
+
+    dia: 'dd/mmm'.
+    jogos: [(fase, real_hdr, [(nome, conf_str, status), ...]), ...] na MESMA ordem de palpiteiros.
+      fase: 'Oitavas' · real_hdr: confronto+placar reais ('RSA 0x1 CAN' ou 'RSA x CAN · a jogar')
+      conf_str: confronto previsto do palpiteiro ('KOR 1x2 CAN') · status: 'cheia'/'metade'/'fora'/None
+    """
+    if not jogos:
+        raise ValueError("nenhum jogo no dia")
+    nomes = [n for n, _, _ in jogos[0][2]]
+    n_col, n_lin = len(jogos), len(nomes)
+    S = SCALE
+    COL_NOME = 150 * S
+    CEL = 214 * S            # cabe 'KOR 1x2 CAN'
+    TIT_H = 72 * S
+    CAB_H = 84 * S           # 2 linhas: fase + confronto/placar real
+    LIN_H = 60 * S
+    LEG_H = 92 * S
+    GAP = 4 * S
+    RAIO = 9 * S
+    PAD = 18 * S
+
+    W = COL_NOME + n_col * CEL
+    H = TIT_H + CAB_H + n_lin * LIN_H + LEG_H
+    img = Image.new("RGB", (W, H), BRANCO)
+    d = ImageDraw.Draw(img)
+    f_tit = _font(_FONTES_BOLD, 34 * S)
+    f_fase = _font(_FONTES_BOLD, 20 * S)
+    f_real = _font(_FONTES_BOLD, 23 * S)
+    f_nome = _font(_FONTES_BOLD, 24 * S)
+    f_cel = _font(_FONTES_BOLD, 25 * S)
+    f_leg = _font(_FONTES, 20 * S)
+
+    d.rectangle([0, 0, W, TIT_H], fill=NAVY)
+    _centro(d, (0, 0, W, TIT_H), f"BOLÃO PCT — mata-mata de {dia}", f_tit, BRANCO)
+
+    y0 = TIT_H
+    d.rectangle([0, y0, W, y0 + CAB_H], fill=CINZA_CAB)
+    for c, (fase, real_hdr, _linhas) in enumerate(jogos):
+        x = COL_NOME + c * CEL
+        _centro(d, (x, y0 + 6 * S, x + CEL, y0 + 6 * S + 30 * S), fase, f_fase, CINZA)
+        _centro(d, (x, y0 + 38 * S, x + CEL, y0 + CAB_H - 6 * S), real_hdr, f_real, NAVY)
+
+    yb = TIT_H + CAB_H
+    for li, nome in enumerate(nomes):
+        y = yb + li * LIN_H
+        if li % 2 == 1:
+            d.rectangle([0, y, COL_NOME, y + LIN_H], fill=ZEBRA)
+        lb, tb, rb, bb = d.textbbox((0, 0), nome, font=f_nome)
+        d.text((PAD, y + (LIN_H - (bb - tb)) / 2 - tb), nome, font=f_nome, fill=PRETO)
+        for c, (_fase, _hdr, linhas) in enumerate(jogos):
+            _, conf_str, status = linhas[li]
+            bg = _STATUS_BG.get(status, INDEF_BG)
+            x = COL_NOME + c * CEL
+            d.rounded_rectangle([x + GAP, y + GAP, x + CEL - GAP, y + LIN_H - GAP], radius=RAIO, fill=bg)
+            _centro(d, (x, y, x + CEL, y + LIN_H), conf_str, f_cel, _text_color(bg))
+
+    yl = H - LEG_H
+    d.line([0, yl, W, yl], fill=CINZA_CAB, width=2 * S)
+    sw = 22 * S
+    cy = yl + 18 * S
+    x = PAD
+    for cor, txt in [(CHEIA_BG, "concorrendo CHEIO"), (META_BG, "METADE (posição trocada)"),
+                     (FORA_BG, "fora (errou o confronto)")]:
+        d.rounded_rectangle([x, cy, x + sw, cy + sw], radius=5 * S, fill=cor)
+        lb, tb, rb, bb = d.textbbox((0, 0), txt, font=f_leg)
+        d.text((x + sw + 8 * S, cy + (sw - (bb - tb)) / 2 - tb), txt, font=f_leg, fill=PRETO)
+        x += sw + 8 * S + (rb - lb) + 26 * S
+    d.text((PAD, cy + sw + 12 * S),
+           "Confronto previsto de cada um (placar de campo)  ·  bolao-pct-copa-2026.streamlit.app",
+           font=f_leg, fill=CINZA)
+
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue()
+
+
 # ===================== Chaveamento do mata-mata (bracket) =====================
 AZUL_CLARO = _lerp(BRANCO, AZUL, 0.20)
 OURO = (212, 175, 55)

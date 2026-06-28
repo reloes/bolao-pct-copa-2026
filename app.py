@@ -213,6 +213,13 @@ def _grade_png(nums, dia):
     return imagem.palpites_grid_png(dia, jogos)
 
 
+@st.cache_data(ttl=600, show_spinner=False)   # mata-mata: cache por CONTEÚDO (a chave muda com o real)
+def _grade_mata_png(dia, jogos):
+    """Bytes PNG da grade do dia no mata-mata (cor = concorrência). `jogos` = tupla-de-tuplas
+    (fase, real_hdr, ((nome, conf_str, status), ...)) — hashable, serve de chave de cache."""
+    return imagem.mata_grid_png(dia, jogos)
+
+
 # ------- chaveamento (bracket) do mata-mata: estrutura compartilhada por HTML e imagem -------
 def _btla(t):
     return fonte_api.EN_TO_TLA.get(t, (t or "")[:3].upper()) if t else ""
@@ -641,6 +648,7 @@ elif pagina == "⚽ Jogos & Gabarito":
     _SELO = {"cheia": "🟢 cheia", "metade": "🟡 metade", "fora": "— fora", None: "—"}
 
     def _render_mata_dia(dia, nums_dia):
+        img_jogos = []                                    # alimenta a imagem do dia (grade por concorrência)
         for num in nums_dia:
             fase_k, _, s1, s2 = KO_INFO[num]
             r = REAL.get(num)
@@ -657,6 +665,11 @@ elif pagina == "⚽ Jogos & Gabarito":
                 confronto = f"{s1} x {s2}"
             pen_real = f" · pênaltis: {tn(RADV.get(num))}" if (r and r[0] == r[1]) else ""
             conc_tit = f" · 🎯 {n_cheia + n_meia} concorrendo ({n_cheia}🟢·{n_meia}🟡)" if (a and b) else ""
+            if a and b:                                   # cabeçalho real p/ a imagem
+                real_hdr = f"{_btla(a)} {r[0]}x{r[1]} {_btla(b)}" if r else f"{_btla(a)} x {_btla(b)} · a jogar"
+            else:
+                real_hdr = "a definir"
+            linhas_img = []
             with st.expander(f"J{num} · {FASE_PT[fase_k]} · {confronto}{pen_real}{conc_tit}"):
                 if a and b:
                     st.caption("🟢 cheia = par de times certo **e** posições de grupo certas · 🟡 metade = par "
@@ -679,8 +692,20 @@ elif pagina == "⚽ Jogos & Gabarito":
                                    "Confronto previsto": f"{tn(qa_)} {g1} x {g2} {tn(qb_)}{pen_txt}",
                                    "Acerto": _SELO[status[q["nome"]]],
                                    "Pontos": pts})
+                    conf_img = f"{_btla(qa_)} {g1}x{g2} {_btla(qb_)}" if (qa_ and qb_) else "—"
+                    linhas_img.append((q["nome"], conf_img, status[q["nome"]]))
                 st.dataframe(pd.DataFrame(linhas), width="stretch", hide_index=True)
+            img_jogos.append((FASE_PT[fase_k], real_hdr, tuple(linhas_img)))
         _botao_zap_dia(_zap_mata(nums_dia, dia), dia)
+        # imagem do dia (grade colorida por concorrência) — só quando há confronto real definido
+        if any(h != "a definir" for _f, h, _l in img_jogos):
+            with st.expander(f"🖼️ Imagem do mata-mata de {dia} (p/ WhatsApp)"):
+                png = _grade_mata_png(dia, tuple(img_jogos))
+                st.image(png, width="stretch")
+                st.download_button(f"⬇️ Baixar imagem de {dia}", data=png,
+                                   file_name=f"mata_{dia.replace('/', '-')}.png",
+                                   mime="image/png", key=f"imgk_{dia}")
+                st.caption("No celular: segure na imagem (ou baixe) → **Compartilhar** → WhatsApp.")
 
     # lista ordenada de TODOS os dias (grupos + mata-mata), com rótulo de fase/status
     _MES = {"jan": 1, "fev": 2, "mar": 3, "abr": 4, "mai": 5, "jun": 6,
