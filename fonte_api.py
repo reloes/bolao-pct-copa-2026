@@ -29,12 +29,20 @@ TLA_TO_EN = {
     "NZL": "New Zealand", "NOR": "Norway", "PAN": "Panama", "PAR": "Paraguay", "POR": "Portugal",
     "QAT": "Qatar", "KSA": "Saudi Arabia", "SCO": "Scotland", "SEN": "Senegal", "RSA": "South Africa",
     "KOR": "South Korea", "ESP": "Spain", "SWE": "Sweden", "SUI": "Switzerland", "TUN": "Tunisia",
-    "TUR": "Türkiye", "USA": "United States", "URY": "Uruguay", "UZB": "Uzbekistan",
+    "TUR": "Türkiye", "USA": "United States", "URU": "Uruguay", "UZB": "Uzbekistan",
 }
 # integridade do de-para: cobre exatamente as 48 seleções do nosso fixture
 assert len(TLA_TO_EN) == 48, f"de-para tem {len(TLA_TO_EN)} (esperado 48)"
 _missing = set(fx.TEAM_PT) ^ set(TLA_TO_EN.values())
 assert not _missing, f"de-para TLA divergente do fixture: {_missing}"
+# TLAs FIFA (CHAVES) conferidos contra a API ao vivo em 2026-06-28 — trava typo de sigla, que o
+# assert de NOMES acima não pega (foi assim que 'URY' passou no lugar do 'URU' real, derrubando
+# os 3 jogos do Uruguai → grupos "incompletos" → mata-mata não apurava). Atualize SE a API mudar.
+_TLAS_FIFA = frozenset(
+    "ALG ARG AUS AUT BEL BIH BRA CAN CPV COL COD CRO CUW CZE ECU EGY ENG FRA GER GHA HAI IRN IRQ "
+    "CIV JPN JOR MEX MAR NED NZL NOR PAN PAR POR QAT KSA SCO SEN RSA KOR ESP SWE SUI TUN TUR USA "
+    "URU UZB".split())
+assert set(TLA_TO_EN) == _TLAS_FIFA, f"TLA(s) fora do padrão FIFA da API: {set(TLA_TO_EN) ^ _TLAS_FIFA}"
 EN_TO_TLA = {en: tla for tla, en in TLA_TO_EN.items()}
 
 # jogo de grupo (num) indexado pelo par de TLAs; guarda o TLA do time1 (orientação do fixture)
@@ -85,17 +93,16 @@ def parse_group_scores(matches):
 
 
 def _ko_field_score(m):
-    """Placar 'de campo' do mata-mata (vale o fim da prorrogação; pênaltis NÃO contam) + o score bruto.
-    Prioriza extraTime/regularTime se a API os expuser; senão fullTime.
-    ⚠️ AJUSTAR/confirmar no 1º jogo real (28/jun): a estrutura de prorrogação/pênaltis só
-    aparece quando há um jogo de mata-mata jogado; hoje só dá p/ testar com cenário simulado."""
-    s = m.get("score") or {}
-    for campo in ("extraTime", "regularTime"):     # placar de campo, sem o shootout
-        v = s.get(campo) or {}
-        if v.get("home") is not None and v.get("away") is not None:
-            return v["home"], v["away"], s
-    ft = s.get("fullTime") or {}
-    return ft.get("home"), ft.get("away"), s
+    """Placar 'de campo' do mata-mata = `fullTime` da API + o score bruto. Na football-data.org o
+    `fullTime` é o resultado ao FIM DA PRORROGAÇÃO e NÃO inclui o shootout (os pênaltis vêm em
+    `score.winner`/`score.penalties`) — exatamente o que a Seção C precisa (prorrogação conta no
+    placar, pênaltis não). VALIDADO no 1º jogo real (28/jun/2026: RSA 0x1 CAN, duration REGULAR;
+    o `score` traz só fullTime/halfTime/duration/winner — sem extraTime/regularTime). Por isso NÃO
+    usamos extraTime/regularTime (se expostos, seriam só-ET ou só-90min → placar errado num jogo de
+    prorrogação). ⚠️ Reconfirmar a leitura do 1º jogo que for a PRORROGAÇÃO/PÊNALTIS (fullTime deve
+    ser o empate de campo; `winner` decide quem passa)."""
+    ft = (m.get("score") or {}).get("fullTime") or {}
+    return ft.get("home"), ft.get("away"), m.get("score") or {}
 
 
 def parse_ko(matches, group_scores):
