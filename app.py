@@ -87,16 +87,28 @@ _PAN_STYLE = ("<style>"
               "table.pf .chips{line-height:1.9}"
               "table.pf .chip{display:inline-block;font-size:1.05rem;margin:1px;padding:0 3px;border-radius:4px}"
               "table.pf .chip.hit{background:rgba(40,165,90,.30);outline:1px solid rgba(40,165,90,.55)}"
-              "table.pf .chip.miss{opacity:.30}"
+              "table.pf .chip.miss{opacity:.28}"                       # eliminado (confirmado fora)
+              "table.pf .chip.sel{outline:2px solid #2b7bd6;background:rgba(43,123,214,.20)}"  # país filtrado
+              "table.pf tr.match td{background:rgba(43,123,214,.10)}"  # palpiteiro TEM o país filtrado
+              "table.pf tr.dim{opacity:.38}"                           # não tem o país filtrado
               "table.pf td.hit{background:rgba(40,165,90,.30)}"
-              "table.pf td.miss{opacity:.35}"
+              "table.pf td.miss{opacity:.30}"
+              "table.pf td.sel{outline:2px solid #2b7bd6}"
               "table.pf td.cel{text-align:center;font-size:1.1rem}"
               "</style>")
 
 
-def _panorama_fase_html(set_key, degrau, palps, pdv_all, membros_real, t2g):
-    """Grade do panorama POR FASE: linha por palpiteiro, células = bandeiras dos times que ELE tem
-    nesta fase (🟢 fundo verde = avançou de verdade; apagada = não avançou) + Acertos + Pts da fase."""
+def _chip_cls(t, real_set, eliminados):
+    """Estado do chip: hit (avançou de verdade) · miss (eliminado, confirmado fora) · alive (ainda vivo)."""
+    if t in real_set:
+        return "hit"
+    return "miss" if t in eliminados else "alive"
+
+
+def _panorama_fase_html(set_key, degrau, palps, pdv_all, membros_real, eliminados, t2g, destaque=None):
+    """Grade do panorama POR FASE: linha por palpiteiro, bandeiras dos times que ELE tem nesta fase.
+    🟢 avançou de verdade · apagado = eliminado · neutro = ainda vivo (fase pendente). Acertos + Pts.
+    destaque (time EN): realça os palpiteiros que têm aquele país nesta fase (e apaga os demais)."""
     full, half = scoring._B_PESOS[degrau]
     real_set = set(membros_real)
     linhas = []
@@ -105,20 +117,24 @@ def _panorama_fase_html(set_key, degrau, palps, pdv_all, membros_real, t2g):
         prev = sorted(pdv[set_key], key=lambda t: (t2g[t], pdv["pos"].get(t, 9)))
         chips, acertos, pts = [], 0, 0
         for t in prev:
-            hit = t in real_set
-            if hit:
+            cls = _chip_cls(t, real_set, eliminados)
+            if cls == "hit":
                 acertos += 1
                 pts += full if pdv["pos"].get(t) == membros_real[t] else half
-            chips.append(f'<span class="chip {"hit" if hit else "miss"}" title="{PT.get(t, "")}">{FLAG.get(t, "·")}</span>')
-        linhas.append(f'<tr><td class="nm">{q["nome"]}</td><td class="chips">{"".join(chips)}</td>'
+            if destaque and t == destaque:
+                cls += " sel"
+            chips.append(f'<span class="chip {cls}" title="{PT.get(t, "")}">{FLAG.get(t, "·")}</span>')
+        tr_cls = ("match" if (destaque in pdv[set_key]) else "dim") if destaque else ""
+        linhas.append(f'<tr class="{tr_cls}"><td class="nm">{q["nome"]}</td><td class="chips">{"".join(chips)}</td>'
                       f'<td class="n">{acertos}/{len(prev)}</td><td class="n">{pts:g}</td></tr>')
     cab = "".join(f"<th>{h}</th>" for h in
                   ("Palpiteiro", "Quem ele tem nesta fase (🟢 = avançou)", "Acertos", "Pts"))
     return _PAN_STYLE + f'<table class="pf"><thead><tr>{cab}</tr></thead><tbody>{"".join(linhas)}</tbody></table>'
 
 
-def _panorama_podio_html(palps, pdv_all, rd):
-    """Grade do pódio previsto: campeão/vice/3º/4º de cada palpiteiro (🟢 = acertou o real) + Pts."""
+def _panorama_podio_html(palps, pdv_all, rd, eliminados, destaque=None):
+    """Grade do pódio previsto: campeão/vice/3º/4º de cada palpiteiro (🟢 = acertou o real;
+    apagado = eliminado; neutro = ainda vivo) + Pts. destaque realça quem tem o país no pódio."""
     slots = [("Campeão", "champion", 30, 15), ("Vice", "vice", 16, 8),
              ("3º", "third", 10, 5), ("4º", "fourth", 10, 5)]
     linhas = []
@@ -130,9 +146,17 @@ def _panorama_podio_html(palps, pdv_all, rd):
             hit = bool(rt) and pt == rt
             if hit:
                 pts += full if pdv["pos"].get(pt) == rd["pos"].get(rt) else half
-            cls = "cel hit" if hit else ("cel miss" if pt else "cel")
+                cls = "cel hit"
+            elif pt and pt in eliminados:
+                cls = "cel miss"
+            else:
+                cls = "cel"
+            if destaque and pt == destaque:
+                cls += " sel"
             cels.append(f'<td class="{cls}" title="{PT.get(pt, "")}">{FLAG.get(pt, "—")}</td>')
-        linhas.append(f'<tr><td class="nm">{q["nome"]}</td>{"".join(cels)}<td class="n">{pts:g}</td></tr>')
+        pod = {pdv[s] for _r, s, _f, _h in slots if pdv[s]}
+        tr_cls = ("match" if (destaque in pod) else "dim") if destaque else ""
+        linhas.append(f'<tr class="{tr_cls}"><td class="nm">{q["nome"]}</td>{"".join(cels)}<td class="n">{pts:g}</td></tr>')
     cab = "".join(f"<th>{h}</th>" for h in ("Palpiteiro", "Campeão", "Vice", "3º", "4º", "Pts"))
     return _PAN_STYLE + f'<table class="pf"><thead><tr>{cab}</tr></thead><tbody>{"".join(linhas)}</tbody></table>'
 
@@ -531,27 +555,47 @@ elif pagina == "📋 Palpites":
         st.markdown(f"🥇 {tn(pdv['champion'])} · 🥈 {tn(pdv['vice'])} · "
                      f"🥉 {tn(pdv['third'])} · 4º {tn(pdv['fourth'])}")
     with t_fase:
-        st.caption("Quem **cada um** tem em **cada fase** do mata-mata e como pontua na Seção B. "
-                   "🟢 = o time avançou de verdade (posição de grupo certa vale cheio; errada, metade).")
+        st.caption("Quem **cada um** tem em **cada fase** do mata-mata (do palpite dele) e como pontua na "
+                   "Seção B. 🟢 = o time avançou de verdade · neutro = ainda vivo · apagado = eliminado. "
+                   "Use o **filtro por país** para realçar quem tem aquele país na fase.")
         rd_pan = scoring.derive_full_adv(REAL, RADV)
         pdv_all = {q["nome"]: scoring.derive_full_adv(q["scores"], q["advancers"]) for q in PALPS}
         t2g = {t: L for L, ts in fx.GROUPS.items() for t in ts}
+        eliminados = set()                                # times fora do torneio real (confirmam "miss")
+        if rd_pan:
+            _allt = {t for ts in fx.GROUPS.values() for t in ts}
+            eliminados = (_allt - rd_pan["R32"]) | {rd_pan["lose"][n] for n in range(73, 105)
+                                                    if rd_pan["lose"].get(n)}
+
+        def _filtro(times, key):                          # seletor de país; devolve o time EN ou None
+            sel = st.selectbox("Filtrar por país", ["(todos)"] + times, key=key,
+                               format_func=lambda t: "(todos os países)" if t == "(todos)"
+                               else f"{FLAG.get(t, '')} {PT[t]}")
+            return None if sel == "(todos)" else sel
+
         subtabs = st.tabs([rot for _d, _s, rot in scoring.FASES_B] + ["Pódio"])
         for (degrau, setk, rot), tb in zip(scoring.FASES_B, subtabs):
             with tb:
-                mr = scoring.membros_fase_real(REAL, RADV, rd_pan, setk)
-                if not mr:
-                    st.info("Esta fase ainda não foi decidida na vida real.")
-                    continue
                 full, half = scoring._B_PESOS[degrau]
-                st.caption(f"{rot}: por time, posição certa **{full:g}** · posição errada **{half:g}**.")
-                st.html(_panorama_fase_html(setk, degrau, PALPS, pdv_all, mr, t2g))
+                mr = scoring.membros_fase_real(REAL, RADV, rd_pan, setk)
+                times_fase = sorted({t for q in PALPS for t in pdv_all[q["nome"]][setk]}, key=lambda t: PT[t])
+                destaque = _filtro(times_fase, f"filtro_{setk}")
+                cap = f"{rot}: por time, posição certa **{full:g}** · posição errada **{half:g}**."
+                if destaque:
+                    _n = sum(1 for q in PALPS if destaque in pdv_all[q["nome"]][setk])
+                    cap += f"  ·  **{_n} de {len(PALPS)}** têm {PT[destaque]} nesta fase."
+                st.caption(cap)
+                st.html(_panorama_fase_html(setk, degrau, PALPS, pdv_all, mr, eliminados, t2g, destaque))
         with subtabs[-1]:
             if not rd_pan:
                 st.info("O pódio aparece quando o mata-mata avançar (semifinais e final).")
             else:
+                times_pod = sorted({pdv_all[q["nome"]][s] for q in PALPS
+                                    for s in ("champion", "vice", "third", "fourth")
+                                    if pdv_all[q["nome"]][s]}, key=lambda t: PT[t])
+                destp = _filtro(times_pod, "filtro_podio")
                 st.caption("Campeão **30/15** · vice **16/8** · 3º e 4º **10/5** (posição de grupo certa / errada).")
-                st.html(_panorama_podio_html(PALPS, pdv_all, rd_pan))
+                st.html(_panorama_podio_html(PALPS, pdv_all, rd_pan, eliminados, destp))
 
 
 # ============================================================ ⚽ JOGOS & GABARITO
