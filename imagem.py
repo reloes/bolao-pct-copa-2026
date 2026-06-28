@@ -60,6 +60,17 @@ def _font(paths, size):
         return ImageFont.load_default()
 
 
+def _fit_size(d, texts, max_w, paths, start, min_):
+    """Maior fonte (de start a min_, em px) em que TODOS os textos cabem em max_w (shrink-to-fit).
+    Evita o texto vazar a célula/coluna — usado em título, cabeçalhos e legendas das imagens."""
+    ts = [t for t in texts if t]
+    for size in range(int(start), int(min_) - 1, -1):
+        f = _font(paths, size)
+        if all(d.textlength(t, font=f) <= max_w for t in ts):
+            return f
+    return _font(paths, int(min_))
+
+
 def _lerp(c1, c2, a):
     """Interpola RGB de c1 a c2 com fator a∈[0,1]."""
     return tuple(round(c1[i] + (c2[i] - c1[i]) * a) for i in range(3))
@@ -219,12 +230,16 @@ def mata_grid_png(dia, jogos):
     H = TIT_H + CAB_H + n_lin * LIN_H + LEG_H
     img = Image.new("RGB", (W, H), BRANCO)
     d = ImageDraw.Draw(img)
-    f_tit = _font(_FONTES_BOLD, 34 * S)
-    f_fase = _font(_FONTES_BOLD, 20 * S)
-    f_real = _font(_FONTES_BOLD, 23 * S)
-    f_nome = _font(_FONTES_BOLD, 24 * S)
-    f_cel = _font(_FONTES_BOLD, 25 * S)
-    f_leg = _font(_FONTES, 20 * S)
+    # shrink-to-fit: nada vaza a coluna/imagem, qualquer que seja o nº de jogos ou o tamanho do texto
+    fases = [f for f, _h, _l in jogos]
+    hdrs = [h for _f, h, _l in jogos]
+    confs = [c for _f, _h, linhas in jogos for _n, c, _s in linhas]
+    f_tit = _fit_size(d, [f"BOLÃO PCT — mata-mata de {dia}"], W - 2 * PAD, _FONTES_BOLD, 34 * S, 18 * S)
+    f_fase = _fit_size(d, fases, CEL - 16 * S, _FONTES_BOLD, 20 * S, 11 * S)
+    f_real = _fit_size(d, hdrs, CEL - 16 * S, _FONTES_BOLD, 23 * S, 12 * S)
+    f_nome = _fit_size(d, nomes, COL_NOME - 2 * PAD, _FONTES_BOLD, 24 * S, 12 * S)
+    f_cel = _fit_size(d, confs, CEL - 16 * S, _FONTES_BOLD, 25 * S, 12 * S)
+    f_leg = _font(_FONTES, 18 * S)
 
     d.rectangle([0, 0, W, TIT_H], fill=NAVY)
     _centro(d, (0, 0, W, TIT_H), f"BOLÃO PCT — mata-mata de {dia}", f_tit, BRANCO)
@@ -252,18 +267,26 @@ def mata_grid_png(dia, jogos):
 
     yl = H - LEG_H
     d.line([0, yl, W, yl], fill=CINZA_CAB, width=2 * S)
-    sw = 22 * S
+    sw = 20 * S
     cy = yl + 18 * S
+    leg_itens = [(CHEIA_BG, "concorrendo (cheio)"), (META_BG, "metade (posição trocada)"),
+                 (FORA_BG, "fora")]
+
+    def _leg_total(f):                                     # largura total da legenda (3 itens) numa fonte
+        return PAD + sum(sw + 8 * S + d.textlength(t, font=f) + 26 * S for _c, t in leg_itens)
+    for s in range(18 * S, 9 * S - 1, -1):                 # encolhe a legenda até caber na largura
+        f_leg = _font(_FONTES, s)
+        if _leg_total(f_leg) <= W - PAD:
+            break
     x = PAD
-    for cor, txt in [(CHEIA_BG, "concorrendo CHEIO"), (META_BG, "METADE (posição trocada)"),
-                     (FORA_BG, "fora (errou o confronto)")]:
+    for cor, txt in leg_itens:
         d.rounded_rectangle([x, cy, x + sw, cy + sw], radius=5 * S, fill=cor)
         lb, tb, rb, bb = d.textbbox((0, 0), txt, font=f_leg)
         d.text((x + sw + 8 * S, cy + (sw - (bb - tb)) / 2 - tb), txt, font=f_leg, fill=PRETO)
         x += sw + 8 * S + (rb - lb) + 26 * S
-    d.text((PAD, cy + sw + 12 * S),
-           "Confronto previsto de cada um (placar de campo)  ·  bolao-pct-copa-2026.streamlit.app",
-           font=f_leg, fill=CINZA)
+    cap = "Confronto previsto de cada um (placar de campo)  ·  bolao-pct-copa-2026.streamlit.app"
+    d.text((PAD, cy + sw + 12 * S), cap,
+           font=_fit_size(d, [cap], W - 2 * PAD, _FONTES, 18 * S, 10 * S), fill=CINZA)
 
     buf = io.BytesIO()
     img.save(buf, format="PNG")
