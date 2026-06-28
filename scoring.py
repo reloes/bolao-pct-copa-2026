@@ -331,3 +331,72 @@ def acertos_cheios(palps, real, real_advancers=None):
                         c[_KO_FASE[n]] += 1
         out[p["nome"]] = c
     return out
+
+
+# ============================================================ Views do mata-mata (UI)
+# Conferência de CLASSIFICADOS por fase (Seção B) e CONCORRÊNCIA por jogo (Seção C).
+# Tudo reusa a MESMA lógica de section_B/section_C — só reorganiza para exibição. Não pontua nada novo.
+FASES_B = [(1, "R32", "16-avos"), (2, "R16", "Oitavas"), (3, "QF", "Quartas"),
+           (4, "SF", "Semifinal"), (5, "DISP3", "Disputa de 3º"), (7, "FINAL", "Final")]
+_B_PESOS = {k: (f, h) for k, _, f, h in se.SET_STEPS_B}     # {degrau: (posição certa, errada)}
+
+
+def membros_fase_real(real_scores, real_adv, rd, set_key):
+    """{time: posição de grupo 1/2/3} dos times que a REALIDADE colocou na fase set_key.
+    R32 (16-avos) é PARCIAL por grupo fechado; demais precisam de rd (bracket real) e refletem os já
+    decididos pelos resultados de mata-mata até agora (jogos não jogados não entram no conjunto)."""
+    if set_key == "R32":
+        return _real_r32_decided(real_scores, rd)
+    if not rd:
+        return {}
+    return {t: rd["pos"][t] for t in rd[set_key]}
+
+
+def conferencia_fase(pdv, membros_real, set_key, degrau):
+    """Linhas [(time, pos_real, previu, pos_palpite, pontos)] de UMA fase — soma == degrau da Seção B.
+    Para cada time que a realidade colocou na fase, vê se o palpiteiro o tem NESTA fase e em que posição
+    de grupo (cheio se a posição bate, metade se não; 0 se não previu o time nesta fase)."""
+    full, half = _B_PESOS[degrau]
+    out = []
+    for t in membros_real:
+        previu = t in pdv[set_key]
+        ppos = pdv["pos"].get(t)
+        pts = (full if ppos == membros_real[t] else half) if previu else 0
+        out.append((t, membros_real[t], previu, ppos, pts))
+    return out
+
+
+def podio_conferencia(pdv, rd):
+    """Linhas do pódio [(rótulo, time_real, time_palpite, pontos)] — degraus 9/8/6 (campeão 30/15,
+    vice 16/8, 3º e 4º 10/5 cada). [] se rd indefinido (bracket real ainda incompleto)."""
+    if not rd:
+        return []
+
+    def pts(slot, full, half):
+        pt, rt = pdv[slot], rd[slot]
+        if rt and pt == rt:
+            return full if pdv["pos"].get(pt) == rd["pos"].get(rt) else half
+        return 0
+    return [("Campeão", rd["champion"], pdv["champion"], pts("champion", 30, 15)),
+            ("Vice", rd["vice"], pdv["vice"], pts("vice", 16, 8)),
+            ("3º lugar", rd["third"], pdv["third"], pts("third", 10, 5)),
+            ("4º lugar", rd["fourth"], pdv["fourth"], pts("fourth", 10, 5))]
+
+
+def concorrencia_jogo(pdv, rd, num):
+    """Status de concorrência de UM palpiteiro num jogo de mata-mata, computável SEM o placar:
+    'cheia' (confronto certo + posições de grupo certas → placar pontua 100%), 'metade' (confronto
+    certo, posição de grupo de 1+ time trocada → placar vale metade), 'fora' (errou o par de times),
+    ou None (confronto real ainda indefinido). Mesma lógica de same/swap/pos_ok da section_C."""
+    if not rd:
+        return None
+    rT, pT = rd["teams"].get(num), pdv["teams"].get(num)
+    if not (rT and rT[0] and rT[1] and pT and pT[0] and pT[1]):
+        return None
+    same = (pT[0] == rT[0] and pT[1] == rT[1])
+    swap = (pT[0] == rT[1] and pT[1] == rT[0])
+    if not (same or swap):
+        return "fora"
+    pos_ok = (pdv["pos"].get(rT[0]) == rd["pos"].get(rT[0])
+              and pdv["pos"].get(rT[1]) == rd["pos"].get(rT[1]))
+    return "cheia" if pos_ok else "metade"

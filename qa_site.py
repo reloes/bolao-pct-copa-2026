@@ -421,6 +421,57 @@ check("grupo A só: decididos = exatamente {1º:1, 2º:2} reais (3º/4º fora)",
 check("grupo A só: nenhum palpiteiro pontua por time fora dos decididos",
       all(set(t for t in _PD[q["nome"]]["R32"] if t in _decA) <= set(_decA) for q in PALPS))
 
+# ---------- 13) Views do mata-mata: conferência por fase + pódio == Seção B; concorrência == section_C
+print("\n13) Views do mata-mata (conferência por fase + concorrência):")
+# (a) para cada palpite real COMPLETO, soma(conferencia_fase por fase) + pódio == Seção B do palpiteiro
+_okB = True
+for _rp in PALPS:
+    _REAL, _RADV = _rp["scores"], _rp["advancers"]
+    _rd = scoring.derive_full_adv(_REAL, _RADV)
+    if not _rd:
+        continue
+    for _p in PALPS:
+        _pdv = scoring.derive_full_adv(_p["scores"], _p["advancers"])
+        _sf = 0
+        for _deg, _setk, _rot in scoring.FASES_B:
+            _mr = scoring.membros_fase_real(_REAL, _RADV, _rd, _setk)
+            _sf += sum(x[4] for x in scoring.conferencia_fase(_pdv, _mr, _setk, _deg))
+        _sp = sum(x[3] for x in scoring.podio_conferencia(_pdv, _rd))
+        _B = scoring.avaliar(_p, _REAL, _RADV, {})["B"]
+        if _sf + _sp != _B:
+            _okB = False
+check("conferência por fase + pódio == Seção B (8×8 pares completos)", _okB)
+
+# (b) concorrência consistente com section_C: 'cheia'/'metade' em jogo jogado → está em perCn; 'fora' → não
+_rpB = byname[DECISIVOS[0]]
+_REAL = _rpB["scores"]
+_rd = scoring.derive_full_adv(_REAL, {})
+_okC = True
+for _p in PALPS:
+    _pdv = scoring.derive_full_adv(_p["scores"], _p["advancers"])
+    _per = scoring.avaliar(_p, _REAL, {}, {})["perCn"]
+    for _num in range(73, 105):
+        _st = scoring.concorrencia_jogo(_pdv, _rd, _num)
+        _jogado = se._validpair(_REAL.get(_num))
+        if _st in ("cheia", "metade") and _jogado and _num not in _per:
+            _okC = False
+        if _st == "fora" and _num in _per:
+            _okC = False
+check("concorrência (cheia/metade/fora) consistente com section_C", _okC)
+
+# (c) parcial: só com grupos (sem mata-mata real) → R32 tem membros, fases seguintes vazias, concorrência None
+_p6 = {n: byname["BUSNITO"]["scores"][n] for _L in "ABCDEFGHIJKL" for n in
+       [m for m, _, _ in scoring.eng.GROUP_FIXT[_L]]}     # 12 grupos, zero mata-mata
+_rd6 = scoring.derive_full_adv(_p6, {})
+check("12 grupos, sem mata-mata: rd existe (bracket real derivado)", _rd6 is not None)
+check("16-avos (R32) tem 32 membros reais", len(scoring.membros_fase_real(_p6, {}, _rd6, "R32")) == 32)
+_pdv6 = scoring.derive_full_adv(byname["PB"]["scores"], byname["PB"]["advancers"])
+check("oitavas vazia sem resultados de mata-mata", len(scoring.membros_fase_real(_p6, {}, _rd6, "R16")) == 0)
+check("concorrência nos 16-avos já definida (não-None) com bracket real",
+      scoring.concorrencia_jogo(_pdv6, _rd6, 73) in ("cheia", "metade", "fora"))
+check("concorrência nas oitavas ainda None (jogo real indefinido)",
+      scoring.concorrencia_jogo(_pdv6, _rd6, 89) is None)
+
 print("\n" + ("✅ QA DO SITE PASSOU — pontuação fiel ao oráculo validado"
               if not fails else f"❌ QA FALHOU: {fails}"))
 sys.exit(0 if not fails else 1)

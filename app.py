@@ -77,6 +77,66 @@ def _comp_grupo_html(L, palps, full):
             f"<tbody>{''.join(linhas)}</tbody></table>")
 
 
+_PAN_STYLE = ("<style>"
+              "table.pf{border-collapse:collapse;width:100%;font-size:.9rem}"
+              "table.pf th,table.pf td{padding:5px 8px;text-align:left;"
+              "border-bottom:1px solid rgba(128,128,128,.2);vertical-align:top}"
+              "table.pf th{font-weight:700;border-bottom:2px solid rgba(128,128,128,.45)}"
+              "table.pf td.nm{white-space:nowrap;font-weight:700}"
+              "table.pf td.n{white-space:nowrap;text-align:right}"
+              "table.pf .chips{line-height:1.9}"
+              "table.pf .chip{display:inline-block;font-size:1.05rem;margin:1px;padding:0 3px;border-radius:4px}"
+              "table.pf .chip.hit{background:rgba(40,165,90,.30);outline:1px solid rgba(40,165,90,.55)}"
+              "table.pf .chip.miss{opacity:.30}"
+              "table.pf td.hit{background:rgba(40,165,90,.30)}"
+              "table.pf td.miss{opacity:.35}"
+              "table.pf td.cel{text-align:center;font-size:1.1rem}"
+              "</style>")
+
+
+def _panorama_fase_html(set_key, degrau, palps, pdv_all, membros_real, t2g):
+    """Grade do panorama POR FASE: linha por palpiteiro, células = bandeiras dos times que ELE tem
+    nesta fase (🟢 fundo verde = avançou de verdade; apagada = não avançou) + Acertos + Pts da fase."""
+    full, half = scoring._B_PESOS[degrau]
+    real_set = set(membros_real)
+    linhas = []
+    for q in palps:
+        pdv = pdv_all[q["nome"]]
+        prev = sorted(pdv[set_key], key=lambda t: (t2g[t], pdv["pos"].get(t, 9)))
+        chips, acertos, pts = [], 0, 0
+        for t in prev:
+            hit = t in real_set
+            if hit:
+                acertos += 1
+                pts += full if pdv["pos"].get(t) == membros_real[t] else half
+            chips.append(f'<span class="chip {"hit" if hit else "miss"}" title="{PT.get(t, "")}">{FLAG.get(t, "·")}</span>')
+        linhas.append(f'<tr><td class="nm">{q["nome"]}</td><td class="chips">{"".join(chips)}</td>'
+                      f'<td class="n">{acertos}/{len(prev)}</td><td class="n">{pts:g}</td></tr>')
+    cab = "".join(f"<th>{h}</th>" for h in
+                  ("Palpiteiro", "Quem ele tem nesta fase (🟢 = avançou)", "Acertos", "Pts"))
+    return _PAN_STYLE + f'<table class="pf"><thead><tr>{cab}</tr></thead><tbody>{"".join(linhas)}</tbody></table>'
+
+
+def _panorama_podio_html(palps, pdv_all, rd):
+    """Grade do pódio previsto: campeão/vice/3º/4º de cada palpiteiro (🟢 = acertou o real) + Pts."""
+    slots = [("Campeão", "champion", 30, 15), ("Vice", "vice", 16, 8),
+             ("3º", "third", 10, 5), ("4º", "fourth", 10, 5)]
+    linhas = []
+    for q in palps:
+        pdv = pdv_all[q["nome"]]
+        cels, pts = [], 0
+        for _rot, slot, full, half in slots:
+            pt, rt = pdv[slot], rd[slot]
+            hit = bool(rt) and pt == rt
+            if hit:
+                pts += full if pdv["pos"].get(pt) == rd["pos"].get(rt) else half
+            cls = "cel hit" if hit else ("cel miss" if pt else "cel")
+            cels.append(f'<td class="{cls}" title="{PT.get(pt, "")}">{FLAG.get(pt, "—")}</td>')
+        linhas.append(f'<tr><td class="nm">{q["nome"]}</td>{"".join(cels)}<td class="n">{pts:g}</td></tr>')
+    cab = "".join(f"<th>{h}</th>" for h in ("Palpiteiro", "Campeão", "Vice", "3º", "4º", "Pts"))
+    return _PAN_STYLE + f'<table class="pf"><thead><tr>{cab}</tr></thead><tbody>{"".join(linhas)}</tbody></table>'
+
+
 @st.cache_data(ttl=3600)   # palpites são congelados
 def _palpites():
     return D.load_palpites()
@@ -350,27 +410,43 @@ if pagina == "🏅 Ranking":
         st.dataframe(pd.DataFrame(ja, columns=["Jogo", "Resultado", "Palpite", "Pontos"]),
                      width="stretch", hide_index=True)
 
-    # conferência dos classificados (Seção B · 16-avos): 1 linha por classificado já confirmado
+    # conferência dos classificados POR FASE (Seção B) — abas por fase + pódio
     rd_real = scoring.derive_full_adv(REAL, RADV)
-    dec = scoring._real_r32_decided(REAL, rd_real)        # {time: posição real 1/2/3 confirmada}
-    if dec and psel:
-        pdv = r["pd"]
+    pdv = r["pd"]
+    if pdv:
         t2g = {t: L for L, ts in fx.GROUPS.items() for t in ts}
-        linhas_b = []
-        for t in sorted(dec, key=lambda x: (t2g[x], dec[x])):
-            classif = t in pdv["R32"]                     # o palpiteiro previu este time classificado?
-            ppos = pdv["pos"].get(t)                      # posição que o palpiteiro deu a ele no grupo
-            pts = (scoring._B1_FULL if ppos == dec[t] else scoring._B1_HALF) if classif else 0
-            linhas_b.append((f"{tn(t)} — {dec[t]}º do {t2g[t]}",
-                             f"{ppos}º do {t2g[t]}" + ("" if classif else " — não classificou"),
-                             f"{pts:g}"))
-        st.caption("Conferência dos classificados (Seção B · 16-avos) — **4** = posição certa · "
-                   "**2** = time certo, posição errada · **0** = não previu classificado:")
-        st.dataframe(pd.DataFrame(linhas_b, columns=["Classificado (real)", "Seu palpite", "Pontos"]),
-                     width="stretch", hide_index=True)
-        if rd_real is not None:
-            st.caption("Inclui os 8 melhores 3ºs (grupos encerrados). Oitavas→final somam à Seção B "
-                       "conforme o mata-mata avança.")
+        _pb = r["perB"]
+        _res = " · ".join(f"{rot} {_pb.get(deg, 0):g}" for deg, _sk, rot in scoring.FASES_B)
+        _pod = _pb.get(6, 0) + _pb.get(8, 0) + _pb.get(9, 0)
+        st.markdown("**Conferência dos classificados por fase (Seção B)**")
+        st.caption(f"Sua Seção B: **{r['B']:g}** — {_res} · pódio {_pod:g}. Em cada fase: **posição de grupo "
+                   "certa** vale cheio; **time certo, posição errada** vale metade; **0** se não previu o time "
+                   "naquela fase.")
+        _tabs = st.tabs([rot for _d, _s, rot in scoring.FASES_B] + ["Pódio"])
+        for (degrau, setk, rot), tab in zip(scoring.FASES_B, _tabs):
+            with tab:
+                mr = scoring.membros_fase_real(REAL, RADV, rd_real, setk)
+                if not mr:
+                    st.info("Esta fase ainda não foi decidida na vida real — aparece conforme os jogos acontecem.")
+                    continue
+                full, half = scoring._B_PESOS[degrau]
+                st.caption(f"**{full:g}** = posição certa · **{half:g}** = time certo, posição errada · **0** = não previu aqui")
+                linhas = []
+                for t, pos_real, previu, ppos, pts in sorted(
+                        scoring.conferencia_fase(pdv, mr, setk, degrau), key=lambda x: (t2g[x[0]], x[1])):
+                    seu = f"{ppos}º do {t2g[t]}" if previu else "não previu nesta fase"
+                    linhas.append((f"{tn(t)} — {pos_real}º do {t2g[t]}", seu, f"{pts:g}"))
+                st.dataframe(pd.DataFrame(linhas, columns=["Quem chegou (real)", "Seu palpite", "Pontos"]),
+                             width="stretch", hide_index=True)
+        with _tabs[-1]:
+            podio = scoring.podio_conferencia(pdv, rd_real)
+            if not podio:
+                st.info("O pódio aparece quando o mata-mata avançar (semifinais e final).")
+            else:
+                st.caption("Campeão **30/15** · vice **16/8** · 3º e 4º **10/5** cada (posição certa / errada).")
+                st.dataframe(pd.DataFrame([(rot, tn(tr), tn(tp), f"{pts:g}") for rot, tr, tp, pts in podio],
+                                          columns=["Pódio", "Real", "Seu palpite", "Pontos"]),
+                             width="stretch", hide_index=True)
 
     with st.expander("Critérios de desempate (Seção D, i–xiii)"):
         st.caption("Usados apenas em caso de empate no total — i é o mais importante.")
@@ -405,7 +481,8 @@ elif pagina == "📋 Palpites":
                 f"{', '.join('J'+str(n) for n in p['sem_escolha'])} — o ramo correspondente do "
                 f"bracket dele ficou indefinido (vale como entregue).")
 
-    t_grupos, t_mata, t_comp = st.tabs(["Fase de grupos", "Mata-mata", "Comparativo dos grupos"])
+    t_grupos, t_mata, t_comp, t_fase = st.tabs(
+        ["Fase de grupos", "Mata-mata", "Comparativo dos grupos", "Por fase (mata-mata)"])
     with t_grupos:
         for row0 in range(0, 12, 3):                      # fileiras A-B-C / D-E-F / ... (ordem de leitura)
             cols = st.columns(3)
@@ -446,6 +523,28 @@ elif pagina == "📋 Palpites":
         st.markdown(f"#### 🏆 Pódio previsto")
         st.markdown(f"🥇 {tn(pdv['champion'])} · 🥈 {tn(pdv['vice'])} · "
                      f"🥉 {tn(pdv['third'])} · 4º {tn(pdv['fourth'])}")
+    with t_fase:
+        st.caption("Quem **cada um** tem em **cada fase** do mata-mata e como pontua na Seção B. "
+                   "🟢 = o time avançou de verdade (posição de grupo certa vale cheio; errada, metade).")
+        rd_pan = scoring.derive_full_adv(REAL, RADV)
+        pdv_all = {q["nome"]: scoring.derive_full_adv(q["scores"], q["advancers"]) for q in PALPS}
+        t2g = {t: L for L, ts in fx.GROUPS.items() for t in ts}
+        subtabs = st.tabs([rot for _d, _s, rot in scoring.FASES_B] + ["Pódio"])
+        for (degrau, setk, rot), tb in zip(scoring.FASES_B, subtabs):
+            with tb:
+                mr = scoring.membros_fase_real(REAL, RADV, rd_pan, setk)
+                if not mr:
+                    st.info("Esta fase ainda não foi decidida na vida real.")
+                    continue
+                full, half = scoring._B_PESOS[degrau]
+                st.caption(f"{rot}: por time, posição certa **{full:g}** · posição errada **{half:g}**.")
+                st.html(_panorama_fase_html(setk, degrau, PALPS, pdv_all, mr, t2g))
+        with subtabs[-1]:
+            if not rd_pan:
+                st.info("O pódio aparece quando o mata-mata avançar (semifinais e final).")
+            else:
+                st.caption("Campeão **30/15** · vice **16/8** · 3º e 4º **10/5** (posição de grupo certa / errada).")
+                st.html(_panorama_podio_html(PALPS, pdv_all, rd_pan))
 
 
 # ============================================================ ⚽ JOGOS & GABARITO
@@ -539,18 +638,30 @@ elif pagina == "⚽ Jogos & Gabarito":
         _botao_zap_dia(_zap_grupos(nums_dia, dia), dia)
         _imagem_dia(nums_dia, dia)
 
+    _SELO = {"cheia": "🟢 cheia", "metade": "🟡 metade", "fora": "— fora", None: "—"}
+
     def _render_mata_dia(dia, nums_dia):
         for num in nums_dia:
             fase_k, _, s1, s2 = KO_INFO[num]
             r = REAL.get(num)
             placar = f"{r[0]} x {r[1]}" if r else "—"
+            # status de concorrência de cada um (cheia/metade/fora) — já vale ANTES do placar
+            status = {q["nome"]: scoring.concorrencia_jogo(pdvs[q["nome"]], rd, num) for q in PALPS}
+            n_cheia = sum(1 for s in status.values() if s == "cheia")
+            n_meia = sum(1 for s in status.values() if s == "metade")
             if rd:
                 a, b = rd["teams"][num]
                 confronto = f"{FLAG.get(a, '')} {PT.get(a, '?')}  {placar}  {PT.get(b, '?')} {FLAG.get(b, '')}"
             else:
+                a = b = None
                 confronto = f"{s1} x {s2}"
             pen_real = f" · pênaltis: {tn(RADV.get(num))}" if (r and r[0] == r[1]) else ""
-            with st.expander(f"J{num} · {FASE_PT[fase_k]} · {confronto}{pen_real}"):
+            conc_tit = f" · 🎯 {n_cheia + n_meia} concorrendo ({n_cheia}🟢·{n_meia}🟡)" if (a and b) else ""
+            with st.expander(f"J{num} · {FASE_PT[fase_k]} · {confronto}{pen_real}{conc_tit}"):
+                if a and b:
+                    st.caption("🟢 cheia = par de times certo **e** posições de grupo certas · 🟡 metade = par "
+                               "certo, posição de grupo trocada · — fora = errou o par. O selo já vale antes do "
+                               "placar (⏳ = concorrendo, jogo por jogar).")
                 linhas = []
                 for q in PALPS:
                     qa_, qb_ = pdvs[q["nome"]]["teams"][num]
@@ -559,10 +670,14 @@ elif pagina == "⚽ Jogos & Gabarito":
                     if g1 == g2:
                         adv = q["advancers"].get(num)
                         pen_txt = f" (pênaltis: {PT.get(adv, '—')})" if adv else ""
-                    pts = perCn[q["nome"]].get(num, "—") if r else "—"
-                    pts = f"{pts:g}" if isinstance(pts, (int, float)) else pts
+                    if r:
+                        pts = perCn[q["nome"]].get(num, "—")
+                        pts = f"{pts:g}" if isinstance(pts, (int, float)) else pts
+                    else:
+                        pts = "⏳" if status[q["nome"]] in ("cheia", "metade") else "—"
                     linhas.append({"Palpiteiro": q["nome"],
                                    "Confronto previsto": f"{tn(qa_)} {g1} x {g2} {tn(qb_)}{pen_txt}",
+                                   "Acerto": _SELO[status[q["nome"]]],
                                    "Pontos": pts})
                 st.dataframe(pd.DataFrame(linhas), width="stretch", hide_index=True)
         _botao_zap_dia(_zap_mata(nums_dia, dia), dia)
