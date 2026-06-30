@@ -177,6 +177,19 @@ check("final empate 1x1 + pênaltis → placar (1,1) e advancer = quem a API mar
       _ko2.get(104) == (1, 1) and _adv2.get(104) == _c104)
 check("mata-mata NÃO deriva sem os 72 grupos completos (gate)",
       fonte_api.parse_ko(_ms, {1: (1, 0)}) == ({}, {}))
+# regressão dos PÊNALTIS reais (29/jun): a API SOMA o shootout no fullTime (GER×PAR fullTime 4x5 =
+# regularTime 1x1 + penalties 3x4) → _ko_field_score DEVE usar regularTime+extraTime (placar de campo).
+_pen = {"score": {"winner": "AWAY_TEAM", "duration": "PENALTY_SHOOTOUT",
+                  "fullTime": {"home": 4, "away": 5}, "regularTime": {"home": 1, "away": 1},
+                  "extraTime": {"home": 0, "away": 0}, "penalties": {"home": 3, "away": 4}}}
+check("pênaltis: placar de campo = regularTime+extraTime (1x1), NÃO o fullTime 4x5 (soma o shootout)",
+      fonte_api._ko_field_score(_pen)[:2] == (1, 1))
+_et = {"score": {"winner": "HOME_TEAM", "duration": "EXTRA_TIME", "fullTime": {"home": 2, "away": 1},
+                 "regularTime": {"home": 1, "away": 1}, "extraTime": {"home": 1, "away": 0}}}
+check("prorrogação decidida em campo: regularTime+extraTime (2x1) = fullTime",
+      fonte_api._ko_field_score(_et)[:2] == (2, 1))
+_reg = {"score": {"winner": "AWAY_TEAM", "duration": "REGULAR", "fullTime": {"home": 0, "away": 1}}}
+check("tempo normal (sem regularTime): usa fullTime (0x1)", fonte_api._ko_field_score(_reg)[:2] == (0, 1))
 
 # ---------- 7) Imagem dos palpites do dia (imagem.py): cor 1-X-2 + intensidade por gols
 print("\n7) Imagem dos palpites do dia (imagem.py):")

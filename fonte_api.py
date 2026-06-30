@@ -93,16 +93,20 @@ def parse_group_scores(matches):
 
 
 def _ko_field_score(m):
-    """Placar 'de campo' do mata-mata = `fullTime` da API + o score bruto. Na football-data.org o
-    `fullTime` é o resultado ao FIM DA PRORROGAÇÃO e NÃO inclui o shootout (os pênaltis vêm em
-    `score.winner`/`score.penalties`) — exatamente o que a Seção C precisa (prorrogação conta no
-    placar, pênaltis não). VALIDADO no 1º jogo real (28/jun/2026: RSA 0x1 CAN, duration REGULAR;
-    o `score` traz só fullTime/halfTime/duration/winner — sem extraTime/regularTime). Por isso NÃO
-    usamos extraTime/regularTime (se expostos, seriam só-ET ou só-90min → placar errado num jogo de
-    prorrogação). ⚠️ Reconfirmar a leitura do 1º jogo que for a PRORROGAÇÃO/PÊNALTIS (fullTime deve
-    ser o empate de campo; `winner` decide quem passa)."""
-    ft = (m.get("score") or {}).get("fullTime") or {}
-    return ft.get("home"), ft.get("away"), m.get("score") or {}
+    """Placar 'de campo' do mata-mata (resultado ao FIM DA PRORROGAÇÃO, SEM o shootout) + o score bruto.
+    ⚠️ ARMADILHA confirmada nos pênaltis reais (29/jun): num jogo de PÊNALTIS a football-data.org SOMA
+    o shootout no `fullTime` (GER×PAR `fullTime` 4×5 = `regularTime` 1×1 + `penalties` 3×4) — então
+    fullTime NÃO é o placar de campo. Regra: se há `regularTime` (houve prorrogação/pênaltis), placar
+    de campo = regularTime + extraTime (gols só da prorrogação); senão (decidido no tempo normal) =
+    fullTime. `score.winner` decide quem passa (cobre os pênaltis → fica empate de campo → advancer).
+    Validado: RSA 0x1 CAN (REGULAR → fullTime), GER 1x1 PAR / NED 1x1 MAR (PÊNALTIS → regularTime)."""
+    s = m.get("score") or {}
+    rt = s.get("regularTime") or {}
+    if rt.get("home") is not None and rt.get("away") is not None:     # houve prorrogação (e talvez pênaltis)
+        et = s.get("extraTime") or {}
+        return rt["home"] + (et.get("home") or 0), rt["away"] + (et.get("away") or 0), s
+    ft = s.get("fullTime") or {}                                      # decidido no tempo normal
+    return ft.get("home"), ft.get("away"), s
 
 
 def parse_ko(matches, group_scores):
