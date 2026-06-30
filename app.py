@@ -427,6 +427,8 @@ if pagina == "🏅 Ranking":
         st.caption("Seção B **parcial**: contam só os classificados (1º/2º) dos grupos já fechados; "
                    "os 8 melhores 3ºs e os degraus de mata-mata entram depois.")
     psel = next((p for p in PALPS if p["nome"] == sel), None)
+    rd_real = scoring.derive_full_adv(REAL, RADV)        # bracket real (None até os 72 grupos)
+    pdv = r["pd"]
     ja = []
     for n in JOGADOS:
         if n > 72:
@@ -437,13 +439,32 @@ if pagina == "🏅 Ranking":
                    f"{pg[0]} x {pg[1]}" if pg else "—",
                    "ANULADO" if n in r["anulados"] else f"{r['perA'][n]:g}"))
     if ja:
-        st.caption("Pontos por jogo já realizado (Seção A):")
+        st.caption("Pontos por jogo de GRUPO já realizado (Seção A):")
         st.dataframe(pd.DataFrame(ja, columns=["Jogo", "Resultado", "Palpite", "Pontos"]),
                      width="stretch", hide_index=True)
 
+    # mata-mata: resultado real + confronto/placar previsto + pontos (Seção C) — como na fase de grupos
+    _selo = {"cheia": "🟢 cheia", "metade": "🟡 metade", "fora": "— fora", None: "—"}
+    jk = []
+    for n in JOGADOS:
+        if n <= 72:
+            continue
+        rt = rd_real["teams"].get(n) if rd_real else None
+        if not (rt and rt[0] and rt[1]):
+            continue                                     # confronto real ainda indefinido
+        res = f"{tn(rt[0])} {REAL[n][0]} x {REAL[n][1]} {tn(rt[1])}"
+        pt = pdv["teams"].get(n) if pdv else None
+        pg = psel["scores"].get(n) if psel else None
+        palp = f"{tn(pt[0])} {pg[0]} x {pg[1]} {tn(pt[1])}" if (pt and pt[0] and pt[1] and pg) else "—"
+        jk.append((f"J{n} · {FASE_PT[KO_INFO[n][0]]}", res, palp,
+                   _selo[scoring.concorrencia_jogo(pdv, rd_real, n)], f"{r['perCn'].get(n, 0):g}"))
+    if jk:
+        st.caption("Pontos por jogo do MATA-MATA (Seção C) — 🟢 cheia · 🟡 metade (posição de grupo "
+                   "trocada) · — fora (errou o confronto). Placar de campo (pênaltis não contam no placar):")
+        st.dataframe(pd.DataFrame(jk, columns=["Jogo", "Resultado", "Seu palpite", "Acerto", "Pontos"]),
+                     width="stretch", hide_index=True)
+
     # conferência dos classificados POR FASE (Seção B) — abas por fase + pódio
-    rd_real = scoring.derive_full_adv(REAL, RADV)
-    pdv = r["pd"]
     if pdv:
         t2g = {t: L for L, ts in fx.GROUPS.items() for t in ts}
         _pb = r["perB"]
