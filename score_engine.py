@@ -153,28 +153,42 @@ _DEGRAU_C = {**{x: 10 for x in range(73, 89)}, **{x: 11 for x in range(89, 97)},
              **{x: 12 for x in range(97, 101)}, **{x: 13 for x in range(101, 103)}, 103: 14, 104: 15}
 
 
+def _pair_index(pd):
+    """{degrau_C: {frozenset(par): (vaga, teams)}} dos confrontos do bracket, por FASE — casa o
+    confronto pelo PAR de times na MESMA fase (qualquer vaga), não pela vaga exata (regulamento:
+    'se acertou que aquele jogo aconteceria naquela fase'; metade se errou a posição de grupo)."""
+    idx = {}
+    for num in range(73, 105):
+        t = pd["teams"].get(num)
+        if t and t[0] and t[1]:
+            idx.setdefault(_DEGRAU_C[num], {})[frozenset((t[0], t[1]))] = (num, t)
+    return idx
+
+
 def section_C(palpite, real):
-    """Placar do mata-mata: só pontua se o confronto previsto = real (par NÃO-ordenado) na MESMA
-    fase; placar comparado POR TIME (orientação pode inverter); meia se a posição-de-grupo de
-    algum dos 2 times difere. (total, {degrau 10..15: pontos})."""
+    """Placar do mata-mata: pontua se o palpiteiro previu esse PAR de times se enfrentando na MESMA
+    FASE (qualquer vaga), com o PLACAR DELE dessa vaga; placar comparado POR TIME (orientação pode
+    inverter); METADE se a posição-de-grupo de algum dos 2 times difere. (total, {degrau 10..15})."""
     pd, rd = derive_full(palpite), derive_full(real)
     per = {d: 0 for d in range(10, 16)}
     if not pd or not rd:
         return 0, per
+    pidx = _pair_index(pd)
     for num in range(73, 105):
         EX, VE, GOL = SCORE_C[num]
-        pT, rT = pd["teams"][num], rd["teams"][num]
-        pg, rg = palpite.get(num), real.get(num)
-        if not (pT[0] and pT[1] and rT[0] and rT[1]):          # confronto não derivado dos 2 lados
+        rT, rg = rd["teams"][num], real.get(num)
+        if not (rT[0] and rT[1] and _validpair(rg)):           # confronto real + placar jogado
             continue
-        if not (_validpair(pg) and _validpair(rg)):            # placar não previsto/jogado
+        deg = _DEGRAU_C[num]
+        hit = pidx.get(deg, {}).get(frozenset((rT[0], rT[1])))  # par previsto NESTA fase?
+        if not hit:
             continue
-        same = (pT[0] == rT[0] and pT[1] == rT[1])
-        swap = (pT[0] == rT[1] and pT[1] == rT[0])
-        if not (same or swap):                                 # confronto diferente -> não pontua
+        m, pT = hit
+        pg = palpite.get(m)
+        if not _validpair(pg):
             continue
-        pg1, pg2 = pg; rg1, rg2 = rg
-        pA, pB = (pg1, pg2) if same else (pg2, pg1)            # gols do palpite alinhados à orientação real
+        rg1, rg2 = rg
+        pA, pB = (pg[0], pg[1]) if pT[0] == rT[0] else (pg[1], pg[0])   # alinha à orientação real
         if pA == rg1 and pB == rg2:
             base = EX
         else:                                            # VE e GOL independentes (organização, 12/jun/2026)
@@ -182,7 +196,7 @@ def section_C(palpite, real):
                     + (GOL if (pA == rg1 or pB == rg2) else 0))
         pos_ok = (pd["pos"].get(rT[0]) == rd["pos"].get(rT[0])
                   and pd["pos"].get(rT[1]) == rd["pos"].get(rT[1]))
-        per[_DEGRAU_C[num]] += base if pos_ok else base / 2
+        per[deg] += base if pos_ok else base / 2
     return sum(per.values()), per
 
 

@@ -199,27 +199,44 @@ def section_B(pd, rd, real_scores):
     return sum(per.values()), per
 
 
+def _pair_index(pd):
+    """{degrau_C: {frozenset(par): (vaga, teams)}} dos confrontos do bracket, por FASE.
+    Permite casar o confronto pelo PAR de times na MESMA fase (qualquer vaga), não pela vaga exata —
+    fiel ao regulamento ('se acertou que aquele jogo aconteceria naquela fase'): um erro de posição
+    de grupo roteia o mesmo par para outra vaga, mas o confronto na fase continua valendo (metade)."""
+    idx = {}
+    for num in range(73, 105):
+        t = pd["teams"].get(num)
+        if t and t[0] and t[1]:
+            idx.setdefault(se._DEGRAU_C[num], {})[frozenset((t[0], t[1]))] = (num, t)
+    return idx
+
+
 def section_C(pd, rd, palpite, real):
-    """(total, {degrau: pts}, {jogo: pts}) — o per-jogo alimenta o expander 'palpites por jogo'."""
+    """(total, {degrau: pts}, {jogo: pts}) — o per-jogo alimenta o expander 'palpites por jogo'.
+    Confronto casado por PAR-na-fase: para cada jogo REAL, procura no bracket do palpiteiro a vaga
+    (na MESMA fase) onde ele tem o mesmo par de times; pontua com o PLACAR DELE dessa vaga. cheia se
+    as posições de grupo dos 2 times batem, metade se não."""
     per = {d: 0 for d in range(10, 16)}
     per_num = {}
     if not pd or not rd:
         return 0, per, per_num
+    pidx = _pair_index(pd)
     for num in range(73, 105):
         EX, VE, GOL = se.SCORE_C[num]
-        pT, rT = pd["teams"][num], rd["teams"][num]
-        pg, rg = palpite.get(num), real.get(num)
-        if not (pT[0] and pT[1] and rT[0] and rT[1]):
+        rT, rg = rd["teams"][num], real.get(num)
+        if not (rT[0] and rT[1] and se._validpair(rg)):
             continue
-        if not (se._validpair(pg) and se._validpair(rg)):
+        deg = se._DEGRAU_C[num]
+        hit = pidx.get(deg, {}).get(frozenset((rT[0], rT[1])))    # par previsto NESTA fase?
+        if not hit:
             continue
-        same = (pT[0] == rT[0] and pT[1] == rT[1])
-        swap = (pT[0] == rT[1] and pT[1] == rT[0])
-        if not (same or swap):
+        m, pT = hit
+        pg = palpite.get(m)
+        if not se._validpair(pg):
             continue
-        pg1, pg2 = pg
         rg1, rg2 = rg
-        pA, pB = (pg1, pg2) if same else (pg2, pg1)
+        pA, pB = (pg[0], pg[1]) if pT[0] == rT[0] else (pg[1], pg[0])   # alinha à orientação real
         if pA == rg1 and pB == rg2:
             base = EX
         else:                                            # VE e GOL independentes (organização, 12/jun/2026)
@@ -227,7 +244,7 @@ def section_C(pd, rd, palpite, real):
                     + (GOL if (pA == rg1 or pB == rg2) else 0))
         pos_ok = (pd["pos"].get(rT[0]) == rd["pos"].get(rT[0])
                   and pd["pos"].get(rT[1]) == rd["pos"].get(rT[1]))
-        per[se._DEGRAU_C[num]] += base if pos_ok else base / 2
+        per[deg] += base if pos_ok else base / 2
         per_num[num] = base if pos_ok else base / 2
     return sum(per.values()), per, per_num
 
@@ -312,21 +329,22 @@ def acertos_cheios(palps, real, real_advancers=None):
             rg, pg = real.get(n), p["scores"].get(n)
             if rg is not None and pg is not None and tuple(pg) == tuple(rg):
                 c["GRUPOS"] += 1
-        if rd:                                                  # mata-mata: confronto real + placar exato
+        if rd:                                                  # mata-mata: confronto (par-na-fase) + placar exato
             pdv = derive_full_adv(p["scores"], p["advancers"])
             if pdv:
+                pidx = _pair_index(pdv)
                 for n in range(73, 105):
-                    rg, pg = real.get(n), p["scores"].get(n)
-                    if not (se._validpair(rg) and se._validpair(pg)):
+                    rg, rT = real.get(n), rd["teams"].get(n)
+                    if not (se._validpair(rg) and rT and rT[0] and rT[1]):
                         continue
-                    rT, pT = rd["teams"].get(n), pdv["teams"].get(n)
-                    if not (rT and rT[0] and rT[1] and pT and pT[0] and pT[1]):
+                    hit = pidx.get(se._DEGRAU_C[n], {}).get(frozenset((rT[0], rT[1])))
+                    if not hit:
                         continue
-                    same = (pT[0] == rT[0] and pT[1] == rT[1])
-                    swap = (pT[0] == rT[1] and pT[1] == rT[0])
-                    if not (same or swap):
+                    m, pT = hit
+                    pg = p["scores"].get(m)
+                    if not se._validpair(pg):
                         continue
-                    pA, pB = (pg[0], pg[1]) if same else (pg[1], pg[0])
+                    pA, pB = (pg[0], pg[1]) if pT[0] == rT[0] else (pg[1], pg[0])
                     if pA == rg[0] and pB == rg[1]:
                         c[_KO_FASE[n]] += 1
         out[p["nome"]] = c
@@ -386,16 +404,20 @@ def podio_conferencia(pdv, rd):
 def concorrencia_jogo(pdv, rd, num):
     """Status de concorrência de UM palpiteiro num jogo de mata-mata, computável SEM o placar:
     'cheia' (confronto certo + posições de grupo certas → placar pontua 100%), 'metade' (confronto
-    certo, posição de grupo de 1+ time trocada → placar vale metade), 'fora' (errou o par de times),
-    ou None (confronto real ainda indefinido). Mesma lógica de same/swap/pos_ok da section_C."""
+    certo, posição de grupo de 1+ time trocada → placar vale metade), 'fora' (não previu esse par na
+    fase), ou None (confronto real ainda indefinido). Casa por PAR-na-fase (qualquer vaga), igual à
+    section_C: o palpiteiro concorre se previu esses 2 times se enfrentando NESTA fase."""
     if not rd:
         return None
-    rT, pT = rd["teams"].get(num), pdv["teams"].get(num)
-    if not (rT and rT[0] and rT[1] and pT and pT[0] and pT[1]):
+    rT = rd["teams"].get(num)
+    if not (rT and rT[0] and rT[1]):
         return None
-    same = (pT[0] == rT[0] and pT[1] == rT[1])
-    swap = (pT[0] == rT[1] and pT[1] == rT[0])
-    if not (same or swap):
+    par = frozenset((rT[0], rT[1]))
+    deg = se._DEGRAU_C[num]
+    tem = any(pdv["teams"].get(m) and pdv["teams"][m][0] and pdv["teams"][m][1]
+              and frozenset(pdv["teams"][m]) == par
+              for m in range(73, 105) if se._DEGRAU_C[m] == deg)   # previu o par NESTA fase?
+    if not tem:
         return "fora"
     pos_ok = (pdv["pos"].get(rT[0]) == rd["pos"].get(rT[0])
               and pdv["pos"].get(rT[1]) == rd["pos"].get(rT[1]))

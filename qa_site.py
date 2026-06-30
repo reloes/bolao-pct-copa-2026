@@ -485,6 +485,30 @@ check("concorrência nos 16-avos já definida (não-None) com bracket real",
 check("concorrência nas oitavas ainda None (jogo real indefinido)",
       scoring.concorrencia_jogo(_pdv6, _rd6, 89) is None)
 
+# ---------- 14) Seção C casada por PAR-NA-FASE (confronto na fase certa, vaga diferente = posição errada)
+print("\n14) Seção C — confronto por par-na-fase (regulamento: 'aquele jogo naquela fase'):")
+_NN = {n: (None, None) for n in range(73, 105)}
+_pdT = {**_NN, 80: ("X", "Y")}                             # palpiteiro tem X×Y nos 16-avos, VAGA 80
+_rdT = {**_NN, 73: ("X", "Y")}                             # real tem X×Y nos 16-avos, VAGA 73 (outra vaga)
+_rd14 = {"teams": _rdT, "pos": {"X": 2, "Y": 2}}           # real: ambos 2º
+# posição errada (X previsto 1º) → METADE; placar exato → 6/2 = 3 no degrau 10
+_t, _p, _pn = scoring.section_C({"teams": _pdT, "pos": {"X": 1, "Y": 2}}, _rd14, {80: (2, 1)}, {73: (2, 1)})
+check("par certo na fase certa, vaga diferente + posição errada + placar exato → METADE (3 de 6)",
+      _p[10] == 3 and _pn.get(73) == 3)
+# posição certa (em qualquer vaga da fase) → CHEIA (6)
+_t2, _p2, _ = scoring.section_C({"teams": _pdT, "pos": {"X": 2, "Y": 2}}, _rd14, {80: (2, 1)}, {73: (2, 1)})
+check("par certo na fase certa, posições certas → CHEIA (6)", _p2[10] == 6)
+# par previsto em FASE diferente (oitavas) não casa com o real (16-avos) → 0
+_t3, _p3, _ = scoring.section_C({"teams": {**_NN, 89: ("X", "Y")}, "pos": {"X": 2, "Y": 2}},
+                                _rd14, {89: (2, 1)}, {73: (2, 1)})
+check("par previsto em FASE diferente → não pontua (0)", sum(_p3.values()) == 0)
+# concorrência (display) acompanha: par-na-fase com posição errada → 'metade'
+_pdv14 = {"teams": _pdT, "pos": {"X": 1, "Y": 2}}
+check("concorrência: par-na-fase, posição errada → 'metade'",
+      scoring.concorrencia_jogo(_pdv14, _rd14, 73) == "metade")
+check("concorrência: par NÃO previsto na fase → 'fora'",
+      scoring.concorrencia_jogo({"teams": _NN, "pos": {}}, _rd14, 73) == "fora")
+
 print("\n" + ("✅ QA DO SITE PASSOU — pontuação fiel ao oráculo validado"
               if not fails else f"❌ QA FALHOU: {fails}"))
 sys.exit(0 if not fails else 1)
