@@ -453,11 +453,13 @@ if pagina == "🏅 Ranking":
         if not (rt and rt[0] and rt[1]):
             continue                                     # confronto real ainda indefinido
         res = f"{tn(rt[0])} {REAL[n][0]} x {REAL[n][1]} {tn(rt[1])}"
-        pt = pdv["teams"].get(n) if pdv else None
-        pg = psel["scores"].get(n) if psel else None
+        st_ = scoring.concorrencia_jogo(pdv, rd_real, n)
+        m = (scoring.vaga_concorrente(pdv, rd_real, n) if st_ in ("cheia", "metade") else None) or n
+        pt = pdv["teams"].get(m) if pdv else None       # vaga onde o palpiteiro tem o par (se concorre)
+        pg = psel["scores"].get(m) if psel else None
         palp = f"{tn(pt[0])} {pg[0]} x {pg[1]} {tn(pt[1])}" if (pt and pt[0] and pt[1] and pg) else "—"
         jk.append((f"J{n} · {FASE_PT[KO_INFO[n][0]]}", res, palp,
-                   _selo[scoring.concorrencia_jogo(pdv, rd_real, n)], f"{r['perCn'].get(n, 0):g}"))
+                   _selo[st_], f"{r['perCn'].get(n, 0):g}"))
     if jk:
         st.caption("Pontos por jogo do MATA-MATA (Seção C) — 🟢 cheia · 🟡 metade (posição de grupo "
                    "trocada) · — fora (errou o confronto). Placar de campo (pênaltis não contam no placar):")
@@ -742,23 +744,28 @@ elif pagina == "⚽ Jogos & Gabarito":
                                "placar (⏳ = concorrendo, jogo por jogar).")
                 linhas = []
                 for q in PALPS:
-                    qa_, qb_ = pdvs[q["nome"]]["teams"][num]
-                    g1, g2 = q["scores"][num]
+                    st_ = status[q["nome"]]
+                    # concorrendo por par-na-fase: mostrar o confronto/placar da VAGA onde ele tem o par
+                    # (ex.: MINDA tem Portugal×Croácia em J87), não a vaga real num (onde ele tem outro par)
+                    m = (scoring.vaga_concorrente(pdvs[q["nome"]], rd, num)
+                         if st_ in ("cheia", "metade") else None) or num
+                    qa_, qb_ = pdvs[q["nome"]]["teams"][m]
+                    g1, g2 = q["scores"][m]
                     pen_txt = ""
                     if g1 == g2:
-                        adv = q["advancers"].get(num)
+                        adv = q["advancers"].get(m)
                         pen_txt = f" (pênaltis: {PT.get(adv, '—')})" if adv else ""
                     if r:
                         pts = perCn[q["nome"]].get(num, "—")
                         pts = f"{pts:g}" if isinstance(pts, (int, float)) else pts
                     else:
-                        pts = "⏳" if status[q["nome"]] in ("cheia", "metade") else "—"
+                        pts = "⏳" if st_ in ("cheia", "metade") else "—"
                     linhas.append({"Palpiteiro": q["nome"],
                                    "Confronto previsto": f"{tn(qa_)} {g1} x {g2} {tn(qb_)}{pen_txt}",
-                                   "Acerto": _SELO[status[q["nome"]]],
+                                   "Acerto": _SELO[st_],
                                    "Pontos": pts})
                     conf_img = f"{_btla(qa_)} {g1}x{g2} {_btla(qb_)}" if (qa_ and qb_) else "—"
-                    linhas_img.append((q["nome"], conf_img, status[q["nome"]]))
+                    linhas_img.append((q["nome"], conf_img, st_))
                 st.dataframe(pd.DataFrame(linhas), width="stretch", hide_index=True)
             img_jogos.append((FASE_PT[fase_k], real_hdr, tuple(linhas_img)))
         _botao_zap_dia(_zap_mata(nums_dia, dia), dia)

@@ -422,3 +422,23 @@ def concorrencia_jogo(pdv, rd, num):
     pos_ok = (pdv["pos"].get(rT[0]) == rd["pos"].get(rT[0])
               and pdv["pos"].get(rT[1]) == rd["pos"].get(rT[1]))
     return "cheia" if pos_ok else "metade"
+
+
+def vaga_concorrente(pdv, rd, num):
+    """A VAGA do bracket do palpiteiro onde ele tem o PAR do jogo real `num` (mesma fase), ou None.
+    Para EXIBIR: quando ele concorre por par-na-fase, o confronto/placar a mostrar é o DESSA vaga (onde
+    o par está, ex.: MINDA tem Portugal×Croácia em J87), não o da vaga real `num` (onde ele tem outro par)."""
+    if not rd:
+        return None
+    rT = rd["teams"].get(num)
+    if not (rT and rT[0] and rT[1]):
+        return None
+    par = frozenset((rT[0], rT[1]))
+    deg = se._DEGRAU_C[num]
+    for m in range(73, 105):
+        if se._DEGRAU_C[m] != deg:
+            continue
+        pT = pdv["teams"].get(m)
+        if pT and pT[0] and pT[1] and frozenset(pT) == par:
+            return m
+    return None
