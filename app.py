@@ -244,6 +244,12 @@ def _grade_mata_png(dia, jogos):
     return imagem.mata_grid_png(dia, jogos)
 
 
+@st.cache_data(ttl=600, show_spinner=False)   # classificados do dia: cache por CONTEÚDO (chaves hashable)
+def _classif_grid_png(dia, cols, linhas):
+    """Bytes PNG dos classificados do dia (posição de grupo). `cols`/`linhas` = tuplas hashable."""
+    return imagem.classif_dia_grid_png(dia, list(cols), [(n, list(c)) for n, c in linhas])
+
+
 # ------- chaveamento (bracket) do mata-mata: estrutura compartilhada por HTML e imagem -------
 def _btla(t):
     return fonte_api.EN_TO_TLA.get(t, (t or "")[:3].upper()) if t else ""
@@ -777,6 +783,34 @@ elif pagina == "⚽ Jogos & Gabarito":
                 st.download_button(f"⬇️ Baixar imagem de {dia}", data=png,
                                    file_name=f"mata_{dia.replace('/', '-')}.png",
                                    mime="image/png", key=f"imgk_{dia}")
+                st.caption("No celular: segure na imagem (ou baixe) → **Compartilhar** → WhatsApp.")
+        # 2ª imagem: classificados do dia (posição de grupo de cada seleção envolvida)
+        times_dia = []
+        for num in nums_dia:
+            for t in (rd["teams"].get(num, (None, None)) if rd else (None, None)):
+                if t and t in rd["R32"] and t not in times_dia:
+                    times_dia.append(t)
+        if times_dia:
+            cols_c = tuple((_btla(t), f"{rd['pos'][t]}º") for t in times_dia)
+            linhas_c = []
+            for q in PALPS:
+                pdvq = pdvs[q["nome"]]
+                cels = []
+                for t in times_dia:
+                    if t not in pdvq["R32"]:
+                        cels.append(("—", "fora"))
+                    else:
+                        pp = pdvq["pos"].get(t)
+                        cels.append((f"{pp}º", "cheio" if pp == rd["pos"][t] else "metade"))
+                linhas_c.append((q["nome"], tuple(cels)))
+            with st.expander(f"🖼️ Imagem: classificados de {dia} (posição nos grupos, p/ WhatsApp)"):
+                st.caption("Por palpiteiro, quais seleções do dia ele classificou e se acertou a posição "
+                           "de grupo (🟢 certa · 🟡 classificou/errada · cinza = não classificou).")
+                pngc = _classif_grid_png(dia, cols_c, tuple(linhas_c))
+                st.image(pngc, width="stretch")
+                st.download_button(f"⬇️ Baixar classificados de {dia}", data=pngc,
+                                   file_name=f"classif_{dia.replace('/', '-')}.png",
+                                   mime="image/png", key=f"clsk_{dia}")
                 st.caption("No celular: segure na imagem (ou baixe) → **Compartilhar** → WhatsApp.")
 
     # lista ordenada de TODOS os dias (grupos + mata-mata), com rótulo de fase/status
