@@ -899,8 +899,15 @@ elif pagina == "🎮 Simulador":
                     if g1 is not None and g2 is not None:
                         sim[num] = (int(g1), int(g2))
                         if g1 == g2:
-                            adv = st.radio(f"Pênaltis J{num} — quem passa?", [tn(a), tn(b)],
-                                           key=f"sim_{num}_adv", horizontal=True)
+                            _opts = [tn(a), tn(b)]
+                            _key = f"sim_{num}_adv"
+                            if st.session_state.get(_key) not in _opts:   # ausente/estale (times mudaram)
+                                st.session_state.pop(_key, None)
+                            _adv_real = tn(RADV.get(num))                 # DEFAULT = quem passou de verdade
+                            if _adv_real in _opts:
+                                st.session_state.setdefault(_key, _adv_real)
+                            adv = st.radio(f"Pênaltis J{num} — quem passa?", _opts,
+                                           key=_key, horizontal=True)
                             sim_adv[num] = a if adv == tn(a) else b
 
     st.subheader("🗺️ Chaveamento")
