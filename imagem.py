@@ -294,13 +294,13 @@ def mata_grid_png(dia, jogos):
 
 
 def classif_dia_grid_png(dia, cols, linhas):
-    """Grade 'classificados do dia' → bytes PNG. Por palpiteiro × time envolvido nos jogos do dia,
-    mostra se ele classificou o time e se acertou a POSIÇÃO de grupo.
+    """Grade 'quem avança do dia' → bytes PNG. Por palpiteiro × time envolvido nos jogos do dia,
+    mostra se ELE tem esse time avançando para a PRÓXIMA fase, colorido por acerto da posição de grupo.
 
     dia: 'dd/mmm'.
     cols: [(tla, pos_real_str), ...] dos times do dia (com a posição de grupo REAL, ex.: ('POR','2º')).
-    linhas: [(nome, [(pos_prevista_str, status), ...]), ...] — pos_prevista = '1º'/'2º'/'3º'/'—';
-      status = 'cheio' (posição certa) · 'metade' (classificou, posição errada) · 'fora' (não classificou).
+    linhas: [(nome, [(texto, status), ...]), ...] — texto = '✓' (avança) ou '—' (não avança); status =
+      'cheio' (avança + posição de grupo certa) · 'metade' (avança, posição errada) · 'fora' (não avança).
     """
     if not cols or not linhas:
         raise ValueError("nada no dia")
@@ -321,7 +321,7 @@ def classif_dia_grid_png(dia, cols, linhas):
     H = TIT_H + CAB_H + n_lin * LIN_H + LEG_H
     img = Image.new("RGB", (W, H), BRANCO)
     d = ImageDraw.Draw(img)
-    f_tit = _fit_size(d, [f"BOLÃO PCT — classificados de {dia}"], W - 2 * PAD, _FONTES_BOLD, 34 * S, 18 * S)
+    f_tit = _fit_size(d, [f"BOLÃO PCT — quem avança de {dia}"], W - 2 * PAD, _FONTES_BOLD, 34 * S, 18 * S)
     f_tla = _fit_size(d, [c[0] for c in cols], CEL - 14 * S, _FONTES_BOLD, 24 * S, 12 * S)
     f_pos = _font(_FONTES, 18 * S)
     f_nome = _fit_size(d, nomes, COL_NOME - 2 * PAD, _FONTES_BOLD, 24 * S, 12 * S)
@@ -329,7 +329,7 @@ def classif_dia_grid_png(dia, cols, linhas):
     f_leg = _font(_FONTES, 18 * S)
 
     d.rectangle([0, 0, W, TIT_H], fill=NAVY)
-    _centro(d, (0, 0, W, TIT_H), f"BOLÃO PCT — classificados de {dia}", f_tit, BRANCO)
+    _centro(d, (0, 0, W, TIT_H), f"BOLÃO PCT — quem avança de {dia}", f_tit, BRANCO)
 
     y0 = TIT_H
     d.rectangle([0, y0, W, y0 + CAB_H], fill=CINZA_CAB)
@@ -355,8 +355,8 @@ def classif_dia_grid_png(dia, cols, linhas):
     d.line([0, yl, W, yl], fill=CINZA_CAB, width=2 * S)
     sw = 20 * S
     cy = yl + 18 * S
-    leg_itens = [(CHEIA_BG, "posição de grupo certa"), (META_BG, "classificou, posição errada"),
-                 (FORA_BG, "não classificou")]
+    leg_itens = [(CHEIA_BG, "avança + posição de grupo certa"), (META_BG, "avança, posição errada"),
+                 (FORA_BG, "não avança")]
 
     def _leg_total(f):
         return PAD + sum(sw + 8 * S + d.textlength(t, font=f) + 26 * S for _c, t in leg_itens)
@@ -370,7 +370,7 @@ def classif_dia_grid_png(dia, cols, linhas):
         lb, tb, rb, bb = d.textbbox((0, 0), txt, font=f_leg)
         d.text((x + sw + 8 * S, cy + (sw - (bb - tb)) / 2 - tb), txt, font=f_leg, fill=PRETO)
         x += sw + 8 * S + (rb - lb) + 26 * S
-    cap = "Nº na célula = posição que o palpiteiro deu ao time nos grupos  ·  bolao-pct-copa-2026.streamlit.app"
+    cap = "✓ = você tem o time na PRÓXIMA fase; cor = acertou a posição de grupo (cabeçalho = real)  ·  bolao-pct-copa-2026.streamlit.app"
     d.text((PAD, cy + sw + 12 * S), cap,
            font=_fit_size(d, [cap], W - 2 * PAD, _FONTES, 18 * S, 10 * S), fill=CINZA)
 

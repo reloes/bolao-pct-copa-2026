@@ -784,12 +784,15 @@ elif pagina == "⚽ Jogos & Gabarito":
                                    file_name=f"mata_{dia.replace('/', '-')}.png",
                                    mime="image/png", key=f"imgk_{dia}")
                 st.caption("No celular: segure na imagem (ou baixe) → **Compartilhar** → WhatsApp.")
-        # 2ª imagem: classificados do dia (posição de grupo de cada seleção envolvida)
-        times_dia = []
+        # 2ª imagem: quem cada um tem AVANÇANDO à próxima fase (dos times que jogam no dia), cor = posição
+        _PROX = {"R32": "R16", "R16": "QF", "QF": "SF", "SF": "FINAL"}
+        times_dia, team_fase = [], {}
         for num in nums_dia:
+            fk = KO_INFO[num][0]
             for t in (rd["teams"].get(num, (None, None)) if rd else (None, None)):
                 if t and t in rd["R32"] and t not in times_dia:
                     times_dia.append(t)
+                    team_fase[t] = fk
         if times_dia:
             cols_c = tuple((_btla(t), f"{rd['pos'][t]}º") for t in times_dia)
             linhas_c = []
@@ -797,19 +800,29 @@ elif pagina == "⚽ Jogos & Gabarito":
                 pdvq = pdvs[q["nome"]]
                 cels = []
                 for t in times_dia:
-                    if t not in pdvq["R32"]:
+                    fk = team_fase[t]
+                    if fk in _PROX:
+                        avanca = t in pdvq[_PROX[fk]]        # tem o time na PRÓXIMA fase?
+                    elif fk == "F":
+                        avanca = (pdvq["champion"] == t)     # final: "avança" = campeão
+                    elif fk == "3P":
+                        avanca = (pdvq["third"] == t)        # disputa 3º: ficou em 3º
+                    else:
+                        avanca = False
+                    if not avanca:
                         cels.append(("—", "fora"))
                     else:
                         pp = pdvq["pos"].get(t)
-                        cels.append((f"{pp}º", "cheio" if pp == rd["pos"][t] else "metade"))
+                        cels.append(("✓", "cheio" if pp == rd["pos"][t] else "metade"))
                 linhas_c.append((q["nome"], tuple(cels)))
-            with st.expander(f"🖼️ Imagem: classificados de {dia} (posição nos grupos, p/ WhatsApp)"):
-                st.caption("Por palpiteiro, quais seleções do dia ele classificou e se acertou a posição "
-                           "de grupo (🟢 certa · 🟡 classificou/errada · cinza = não classificou).")
+            with st.expander(f"🖼️ Imagem: quem avança de {dia} (p/ WhatsApp)"):
+                st.caption("Por palpiteiro, quais seleções do dia ele tem **avançando para a próxima "
+                           "fase**; a cor diz se acertou a **posição de grupo** (🟢 certa · 🟡 avança, "
+                           "posição errada · cinza = não avança).")
                 pngc = _classif_grid_png(dia, cols_c, tuple(linhas_c))
                 st.image(pngc, width="stretch")
-                st.download_button(f"⬇️ Baixar classificados de {dia}", data=pngc,
-                                   file_name=f"classif_{dia.replace('/', '-')}.png",
+                st.download_button(f"⬇️ Baixar imagem de {dia}", data=pngc,
+                                   file_name=f"avanca_{dia.replace('/', '-')}.png",
                                    mime="image/png", key=f"clsk_{dia}")
                 st.caption("No celular: segure na imagem (ou baixe) → **Compartilhar** → WhatsApp.")
 
