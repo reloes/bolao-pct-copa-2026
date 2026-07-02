@@ -337,6 +337,11 @@ def classif_dia_grid_png(dia, cols, linhas):
         x = COL_NOME + c * CEL
         _centro(d, (x, y0 + 6 * S, x + CEL, y0 + 6 * S + 30 * S), tla, f_tla, NAVY)
         _centro(d, (x, y0 + 38 * S, x + CEL, y0 + CAB_H - 4 * S), f"{pos_real} real", f_pos, CINZA)
+    # "x" entre os 2 times de cada jogo (colunas consecutivas = confronto do dia)
+    f_x = _font(_FONTES_BOLD, 24 * S)
+    for c in range(n_col // 2):
+        xb = COL_NOME + (2 * c + 1) * CEL
+        _centro(d, (xb - 16 * S, y0 + 6 * S, xb + 16 * S, y0 + 6 * S + 30 * S), "x", f_x, PRETO)
 
     yb = TIT_H + CAB_H
     for li, (nome, cels) in enumerate(linhas):
