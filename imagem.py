@@ -71,6 +71,22 @@ def _fit_size(d, texts, max_w, paths, start, min_):
     return _font(paths, int(min_))
 
 
+def _wrap_words(d, text, font, max_w):
+    """Quebra `text` em linhas cujo comprimento renderizado cabe em max_w (quebra por palavras).
+    Usado no rodapé das imagens: em telas estreitas (dias de 1 jogo) o texto quebra em vez de vazar."""
+    lines, cur = [], ""
+    for w in text.split():
+        trial = (cur + " " + w).strip()
+        if cur and d.textlength(trial, font=font) > max_w:
+            lines.append(cur)
+            cur = w
+        else:
+            cur = trial
+    if cur:
+        lines.append(cur)
+    return lines or [text]
+
+
 def _lerp(c1, c2, a):
     """Interpola RGB de c1 a c2 com fator a∈[0,1]."""
     return tuple(round(c1[i] + (c2[i] - c1[i]) * a) for i in range(3))
@@ -378,6 +394,135 @@ def classif_dia_grid_png(dia, cols, linhas):
     cap = "✓ = você tem o time na PRÓXIMA fase; cor = acertou a posição de grupo (cabeçalho = real)  ·  bolao-pct-copa-2026.streamlit.app"
     d.text((PAD, cy + sw + 12 * S), cap,
            font=_fit_size(d, [cap], W - 2 * PAD, _FONTES, 18 * S, 10 * S), fill=CINZA)
+
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def dia_grid_png(dia, jogos):
+    """Grade ÚNICA do dia no mata-mata → bytes PNG (funde concorrência + quem avança).
+    Por jogo, 3 células: [time A avança à próxima fase? ✓/—] [MEIO: seu palpite de placar /
+    concorrência] [time B avança? ✓/—]. Cor coerente: verde = acerto cheio · âmbar = parcial · cinza
+    = não. jogos: [(tlaA, posA, tlaB, posB, real_hdr,
+      [(nome, (txtA,stA), (plc,stM), (txtB,stB)), ...]), ...]; st* ∈ {'cheio','metade','fora'}."""
+    if not jogos:
+        raise ValueError("nada no dia")
+    nomes = [n for n, *_ in jogos[0][5]]
+    n_jogo, n_lin = len(jogos), len(nomes)
+    S = SCALE
+    COL_NOME = 150 * S
+    W_LADO = 60 * S          # coluna de cada time (✓/—)
+    W_MEIO = 104 * S         # coluna do meio (placar/concorrência)
+    W_JOGO = W_LADO * 2 + W_MEIO
+    SEPJ = 10 * S            # respiro entre jogos
+    TIT_H = 72 * S
+    CAB_H = 66 * S
+    LIN_H = 54 * S
+    GAP = 3 * S
+    RAIO = 8 * S
+    PAD = 18 * S
+    W = COL_NOME + n_jogo * W_JOGO + (n_jogo - 1) * SEPJ
+    avail = W - 2 * PAD
+
+    # rodapé + legenda: medir/quebrar ANTES de dimensionar (dias de 1 jogo são estreitos, e a legenda/nota
+    # precisam empacotar/quebrar em várias linhas em vez de vazar pela borda direita)
+    _dd = ImageDraw.Draw(Image.new("RGB", (1, 1)))
+    sw = 20 * S
+    LEG_GAP = 26 * S
+    leg = [(CHEIA_BG, "acertou cheio"),
+           (META_BG, "acertou pela metade (posição de grupo trocada)"),
+           (FORA_BG, "não")]
+
+    def _item_w(txt, f):
+        return sw + 8 * S + _dd.textlength(txt, font=f) + LEG_GAP
+
+    f_leg = _font(_FONTES, 16 * S)                       # encolhe até CADA item caber sozinho na largura
+    for _sz in range(16 * S, 9 * S - 1, -1):
+        f_leg = _font(_FONTES, _sz)
+        if all(_item_w(t, f_leg) <= avail for _, t in leg):
+            break
+    leg_rows, _cur, _cw = [], [], 0                      # empacota os itens: 1 linha quando cabe, várias se estreito
+    for _it in leg:
+        _iw = _item_w(_it[1], f_leg)
+        if _cur and _cw + _iw > avail:
+            leg_rows.append(_cur)
+            _cur, _cw = [], 0
+        _cur.append(_it)
+        _cw += _iw
+    if _cur:
+        leg_rows.append(_cur)
+
+    fL = _font(_FONTES, 15 * S)
+    l1 = "Colunas dos times (✓): tem esse time passando de fase — nº no cabeçalho = posição real no grupo."
+    l2 = "Coluna do meio: o placar que ele apostou no confronto (cinza = não apostou esse confronto)."
+    foot = _wrap_words(_dd, l1, fL, avail) + _wrap_words(_dd, l2, fL, avail)
+
+    LEG_ROW_H = sw + 10 * S
+    FOOT_LH = 24 * S
+    LEG_H = 14 * S + len(leg_rows) * LEG_ROW_H + 10 * S + len(foot) * FOOT_LH + 12 * S
+
+    H = TIT_H + CAB_H + n_lin * LIN_H + LEG_H
+    img = Image.new("RGB", (W, H), BRANCO)
+    d = ImageDraw.Draw(img)
+    f_tit = _fit_size(d, [f"BOLÃO PCT — mata-mata de {dia}"], avail, _FONTES_BOLD, 34 * S, 18 * S)
+    f_tla = _fit_size(d, [j[0] for j in jogos] + [j[2] for j in jogos], W_LADO - 6 * S, _FONTES_BOLD, 22 * S, 11 * S)
+    f_pos = _font(_FONTES, 16 * S)
+    f_hdr = _fit_size(d, [j[4] for j in jogos], W_MEIO - 8 * S, _FONTES_BOLD, 20 * S, 11 * S)
+    f_nome = _fit_size(d, nomes, COL_NOME - 2 * PAD, _FONTES_BOLD, 23 * S, 12 * S)
+    f_lado = _font(_FONTES_BOLD, 24 * S)
+    f_meio = _font(_FONTES_BOLD, 22 * S)
+
+    def _xj(j):
+        return COL_NOME + j * (W_JOGO + SEPJ)
+
+    d.rectangle([0, 0, W, TIT_H], fill=NAVY)
+    _centro(d, (0, 0, W, TIT_H), f"BOLÃO PCT — mata-mata de {dia}", f_tit, BRANCO)
+
+    y0 = TIT_H
+    d.rectangle([0, y0, W, y0 + CAB_H], fill=CINZA_CAB)
+    for j, (tlaA, posA, tlaB, posB, real_hdr, _l) in enumerate(jogos):
+        xj = _xj(j)
+        _centro(d, (xj, y0 + 5 * S, xj + W_LADO, y0 + 33 * S), tlaA, f_tla, NAVY)
+        _centro(d, (xj, y0 + 34 * S, xj + W_LADO, y0 + CAB_H - 3 * S), f"{posA}", f_pos, CINZA)
+        _centro(d, (xj + W_LADO, y0 + 5 * S, xj + W_LADO + W_MEIO, y0 + 33 * S), real_hdr, f_hdr, PRETO)
+        _centro(d, (xj + W_LADO, y0 + 34 * S, xj + W_LADO + W_MEIO, y0 + CAB_H - 3 * S), "real", f_pos, CINZA)
+        _centro(d, (xj + W_LADO + W_MEIO, y0 + 5 * S, xj + W_JOGO, y0 + 33 * S), tlaB, f_tla, NAVY)
+        _centro(d, (xj + W_LADO + W_MEIO, y0 + 34 * S, xj + W_JOGO, y0 + CAB_H - 3 * S), f"{posB}", f_pos, CINZA)
+
+    _mp = {"cheio": "cheia", "metade": "metade", "fora": "fora"}   # reusa _STATUS_BG
+    yb = TIT_H + CAB_H
+    for li, nome in enumerate(nomes):
+        y = yb + li * LIN_H
+        if li % 2 == 1:
+            d.rectangle([0, y, COL_NOME, y + LIN_H], fill=ZEBRA)
+        lb, tb, rb, bb = d.textbbox((0, 0), nome, font=f_nome)
+        d.text((PAD, y + (LIN_H - (bb - tb)) / 2 - tb), nome, font=f_nome, fill=PRETO)
+        for j, jogo in enumerate(jogos):
+            _n, (txtA, stA), (plc, stM), (txtB, stB) = jogo[5][li]
+            xj = _xj(j)
+            for (cx, cw, txt, stt, fnt) in ((xj, W_LADO, txtA, stA, f_lado),
+                                            (xj + W_LADO, W_MEIO, plc, stM, f_meio),
+                                            (xj + W_LADO + W_MEIO, W_LADO, txtB, stB, f_lado)):
+                bg = _STATUS_BG.get(_mp.get(stt), INDEF_BG)
+                d.rounded_rectangle([cx + GAP, y + GAP, cx + cw - GAP, y + LIN_H - GAP], radius=RAIO, fill=bg)
+                _centro(d, (cx, y, cx + cw, y + LIN_H), txt, fnt, _text_color(bg))
+
+    yl = H - LEG_H
+    d.line([0, yl, W, yl], fill=CINZA_CAB, width=2 * S)
+    cy = yl + 14 * S
+    for row in leg_rows:                          # legenda (cores) — 1+ linhas conforme a largura
+        x = PAD
+        for cor, txt in row:
+            d.rounded_rectangle([x, cy, x + sw, cy + sw], radius=5 * S, fill=cor)
+            lb, tb, rb, bb = d.textbbox((0, 0), txt, font=f_leg)
+            d.text((x + sw + 8 * S, cy + (sw - (bb - tb)) / 2 - tb), txt, font=f_leg, fill=PRETO)
+            x += _item_w(txt, f_leg)
+        cy += LEG_ROW_H
+    cy += 10 * S
+    for ln in foot:                               # rodapé: só o QUE cada coluna é (quebrado p/ nunca vazar)
+        d.text((PAD, cy), ln, font=fL, fill=CINZA)
+        cy += FOOT_LH
 
     buf = io.BytesIO()
     img.save(buf, format="PNG")

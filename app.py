@@ -237,17 +237,12 @@ def _grade_png(nums, dia):
     return imagem.palpites_grid_png(dia, jogos)
 
 
-@st.cache_data(ttl=600, show_spinner=False)   # mata-mata: cache por CONTEÚDO (a chave muda com o real)
-def _grade_mata_png(dia, jogos):
-    """Bytes PNG da grade do dia no mata-mata (cor = concorrência). `jogos` = tupla-de-tuplas
-    (fase, real_hdr, ((nome, conf_str, status), ...)) — hashable, serve de chave de cache."""
-    return imagem.mata_grid_png(dia, jogos)
-
-
-@st.cache_data(ttl=600, show_spinner=False)   # classificados do dia: cache por CONTEÚDO (chaves hashable)
-def _classif_grid_png(dia, cols, linhas):
-    """Bytes PNG dos classificados do dia (posição de grupo). `cols`/`linhas` = tuplas hashable."""
-    return imagem.classif_dia_grid_png(dia, list(cols), [(n, list(c)) for n, c in linhas])
+@st.cache_data(ttl=600, show_spinner=False)   # imagem ÚNICA do dia no mata-mata: cache por CONTEÚDO
+def _dia_grid_png(dia, jogos):
+    """Bytes PNG da imagem ÚNICA do dia (funde "quem avança" + "concorrência pelo placar").
+    `jogos` = tupla-de-tuplas (tlaA, posA, tlaB, posB, real_hdr, ((nome,(txt,st),(plc,st),(txt,st)),…))
+    — hashable, serve de chave de cache."""
+    return imagem.dia_grid_png(dia, [(*g[:5], list(g[5])) for g in jogos])
 
 
 # ------- chaveamento (bracket) do mata-mata: estrutura compartilhada por HTML e imagem -------
@@ -721,7 +716,7 @@ elif pagina == "⚽ Jogos & Gabarito":
     _SELO = {"cheia": "🟢 cheia", "metade": "🟡 metade", "fora": "— fora", None: "—"}
 
     def _render_mata_dia(dia, nums_dia):
-        img_jogos = []                                    # alimenta a imagem do dia (grade por concorrência)
+        _PROX = {"R32": "R16", "R16": "QF", "QF": "SF", "SF": "FINAL"}
         for num in nums_dia:
             fase_k, _, s1, s2 = KO_INFO[num]
             r = REAL.get(num)
@@ -738,11 +733,6 @@ elif pagina == "⚽ Jogos & Gabarito":
                 confronto = f"{s1} x {s2}"
             pen_real = f" · pênaltis: {tn(RADV.get(num))}" if (r and r[0] == r[1]) else ""
             conc_tit = f" · 🎯 {n_cheia + n_meia} concorrendo ({n_cheia}🟢·{n_meia}🟡)" if (a and b) else ""
-            if a and b:                                   # cabeçalho real p/ a imagem
-                real_hdr = f"{_btla(a)} {r[0]}x{r[1]} {_btla(b)}" if r else f"{_btla(a)} x {_btla(b)} · a jogar"
-            else:
-                real_hdr = "a definir"
-            linhas_img = []
             with st.expander(f"J{num} · {FASE_PT[fase_k]} · {confronto}{pen_real}{conc_tit}"):
                 if a and b:
                     st.caption("🟢 cheia = par de times certo **e** posições de grupo certas · 🟡 metade = par "
@@ -770,60 +760,57 @@ elif pagina == "⚽ Jogos & Gabarito":
                                    "Confronto previsto": f"{tn(qa_)} {g1} x {g2} {tn(qb_)}{pen_txt}",
                                    "Acerto": _SELO[st_],
                                    "Pontos": pts})
-                    conf_img = f"{_btla(qa_)} {g1}x{g2} {_btla(qb_)}" if (qa_ and qb_) else "—"
-                    linhas_img.append((q["nome"], conf_img, st_))
                 st.dataframe(pd.DataFrame(linhas), width="stretch", hide_index=True)
-            img_jogos.append((FASE_PT[fase_k], real_hdr, tuple(linhas_img)))
         _botao_zap_dia(_zap_mata(nums_dia, dia), dia)
-        # imagem do dia (grade colorida por concorrência) — só quando há confronto real definido
-        if any(h != "a definir" for _f, h, _l in img_jogos):
+
+        # imagem ÚNICA do dia (funde "quem avança" + "concorrência pelo placar"): por palpiteiro e por
+        # jogo, colunas dos times = quem ele tem passando de fase; coluna do meio = o placar que apostou.
+        def _avc(pdvq, t, fk):
+            """(txt, status) — o palpiteiro tem o time t passando desta fase? cor = posição de grupo."""
+            if fk in _PROX:
+                av = t in pdvq[_PROX[fk]]
+            elif fk == "F":
+                av = (pdvq["champion"] == t)          # final: "avança" = campeão
+            elif fk == "3P":
+                av = (pdvq["third"] == t)             # disputa 3º: ficou em 3º
+            else:
+                av = False
+            if not av:
+                return ("—", "fora")
+            return ("✓", "cheio" if pdvq["pos"].get(t) == rd["pos"][t] else "metade")
+
+        uni_jogos = []
+        if rd:
+            for num in nums_dia:
+                a, b = rd["teams"].get(num, (None, None))
+                if not (a and b):                        # confronto real ainda indefinido → fora da imagem
+                    continue
+                fk = KO_INFO[num][0]
+                r = REAL.get(num)
+                real_hdr = f"{r[0]}x{r[1]}" if r else "x"
+                linhas_u = []
+                for q in PALPS:
+                    pdvq = pdvs[q["nome"]]
+                    st_ = scoring.concorrencia_jogo(pdvq, rd, num)     # cheia/metade/fora
+                    if st_ in ("cheia", "metade"):
+                        m = scoring.vaga_concorrente(pdvq, rd, num) or num
+                        g1, g2 = q["scores"][m]
+                        meio = (f"{g1}x{g2}", "cheio" if st_ == "cheia" else "metade")
+                    else:
+                        meio = ("—", "fora")
+                    linhas_u.append((q["nome"], _avc(pdvq, a, fk), meio, _avc(pdvq, b, fk)))
+                uni_jogos.append((_btla(a), f"{rd['pos'][a]}º", _btla(b), f"{rd['pos'][b]}º",
+                                  real_hdr, tuple(linhas_u)))
+        if uni_jogos:
             with st.expander(f"🖼️ Imagem do mata-mata de {dia} (p/ WhatsApp)"):
-                png = _grade_mata_png(dia, tuple(img_jogos))
+                st.caption("Por palpiteiro e por jogo: **quem ele tem passando de fase** (colunas dos times, "
+                           "✓) e o **placar que apostou** naquele confronto (coluna do meio). Cor: 🟢 acertou "
+                           "cheio · 🟡 metade (posição de grupo trocada) · cinza = não.")
+                png = _dia_grid_png(dia, tuple(uni_jogos))
                 st.image(png, width="stretch")
                 st.download_button(f"⬇️ Baixar imagem de {dia}", data=png,
                                    file_name=f"mata_{dia.replace('/', '-')}.png",
                                    mime="image/png", key=f"imgk_{dia}")
-                st.caption("No celular: segure na imagem (ou baixe) → **Compartilhar** → WhatsApp.")
-        # 2ª imagem: quem cada um tem AVANÇANDO à próxima fase (dos times que jogam no dia), cor = posição
-        _PROX = {"R32": "R16", "R16": "QF", "QF": "SF", "SF": "FINAL"}
-        times_dia, team_fase = [], {}
-        for num in nums_dia:
-            fk = KO_INFO[num][0]
-            for t in (rd["teams"].get(num, (None, None)) if rd else (None, None)):
-                if t and t in rd["R32"] and t not in times_dia:
-                    times_dia.append(t)
-                    team_fase[t] = fk
-        if times_dia:
-            cols_c = tuple((_btla(t), f"{rd['pos'][t]}º") for t in times_dia)
-            linhas_c = []
-            for q in PALPS:
-                pdvq = pdvs[q["nome"]]
-                cels = []
-                for t in times_dia:
-                    fk = team_fase[t]
-                    if fk in _PROX:
-                        avanca = t in pdvq[_PROX[fk]]        # tem o time na PRÓXIMA fase?
-                    elif fk == "F":
-                        avanca = (pdvq["champion"] == t)     # final: "avança" = campeão
-                    elif fk == "3P":
-                        avanca = (pdvq["third"] == t)        # disputa 3º: ficou em 3º
-                    else:
-                        avanca = False
-                    if not avanca:
-                        cels.append(("—", "fora"))
-                    else:
-                        pp = pdvq["pos"].get(t)
-                        cels.append(("✓", "cheio" if pp == rd["pos"][t] else "metade"))
-                linhas_c.append((q["nome"], tuple(cels)))
-            with st.expander(f"🖼️ Imagem: quem avança de {dia} (p/ WhatsApp)"):
-                st.caption("Por palpiteiro, quais seleções do dia ele tem **avançando para a próxima "
-                           "fase**; a cor diz se acertou a **posição de grupo** (🟢 certa · 🟡 avança, "
-                           "posição errada · cinza = não avança).")
-                pngc = _classif_grid_png(dia, cols_c, tuple(linhas_c))
-                st.image(pngc, width="stretch")
-                st.download_button(f"⬇️ Baixar imagem de {dia}", data=pngc,
-                                   file_name=f"avanca_{dia.replace('/', '-')}.png",
-                                   mime="image/png", key=f"clsk_{dia}")
                 st.caption("No celular: segure na imagem (ou baixe) → **Compartilhar** → WhatsApp.")
 
     # lista ordenada de TODOS os dias (grupos + mata-mata), com rótulo de fase/status
