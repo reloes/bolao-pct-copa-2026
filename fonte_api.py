@@ -109,6 +109,18 @@ def _ko_field_score(m):
     return ft.get("home"), ft.get("away"), s
 
 
+def _agg_winner(s, ht, a, b):
+    """Quem passou quando a API NÃO preenche `score.winner` num mata-mata FINISHED (visto no AUS×EGY,
+    03/jul: pênaltis, status FINISHED, mas `winner=null`). Usa o agregado `fullTime` — que SOMA o
+    shootout dos pênaltis — para desempatar o placar de campo. Orienta p/ (a,b); None se indefinido."""
+    ft = s.get("fullTime") or {}
+    fh, fa = ft.get("home"), ft.get("away")
+    if fh is None or fa is None or fh == fa:
+        return None
+    ft_a, ft_b = (fh, fa) if ht == EN_TO_TLA[a] else (fa, fh)
+    return a if ft_a > ft_b else b
+
+
 def parse_ko(matches, group_scores):
     """{num:(g1,g2)} e {num: advancer_en} dos jogos de MATA-MATA FINISHED, mapeados aos slots
     73-104. Casa por par de times — os 16-avos vêm da derivação dos grupos (matriz oficial) e
@@ -152,8 +164,10 @@ def parse_ko(matches, group_scores):
             w_en = TLA_TO_EN.get(ht)
         elif wside == "AWAY_TEAM":
             w_en = TLA_TO_EN.get((m["awayTeam"]).get("tla"))
-        else:
-            w_en = a if g_a > g_b else (b if g_b > g_a else None)
+        elif g_a != g_b:                             # winner ausente, mas o placar de campo já decide
+            w_en = a if g_a > g_b else b
+        else:                                        # empate de campo + winner ausente (a API às vezes não
+            w_en = _agg_winner(s, ht, a, b)          # preenche winner nos pênaltis) → desempata pelo fullTime
         win[num] = w_en
         lose[num] = (b if w_en == a else a) if w_en else None
         if g_a == g_b and w_en:                      # empate de campo -> decidido nos pênaltis -> quem passou

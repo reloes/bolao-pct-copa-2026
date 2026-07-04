@@ -190,6 +190,29 @@ check("prorrogação decidida em campo: regularTime+extraTime (2x1) = fullTime",
       fonte_api._ko_field_score(_et)[:2] == (2, 1))
 _reg = {"score": {"winner": "AWAY_TEAM", "duration": "REGULAR", "fullTime": {"home": 0, "away": 1}}}
 check("tempo normal (sem regularTime): usa fullTime (0x1)", fonte_api._ko_field_score(_reg)[:2] == (0, 1))
+# regressão do WINNER=NULL (AUS×EGY, 03/jul): a API deixou `winner`=null num mata-mata FINISHED de
+# PÊNALTIS → o advancer deve vir do agregado fullTime (que SOMA o shootout), nunca ficar vazio (senão o
+# time some das fases seguintes). JSON real: regularTime 1x1, fullTime 3x5 (Egito/away passou).
+_j88 = {"winner": None, "duration": "PENALTY_SHOOTOUT", "fullTime": {"home": 3, "away": 5},
+        "regularTime": {"home": 1, "away": 1}, "extraTime": {"home": 0, "away": 0},
+        "penalties": {"home": 4, "away": 4}}
+check("winner=null nos pênaltis: advancer pelo fullTime agregado (AUS 3 / EGY 5 → Egito passa)",
+      fonte_api._agg_winner(_j88, EN2TLA["Australia"], "Australia", "Egypt") == "Egypt")
+check("winner=null: orientação p/ (a,b) independe de quem a API põe como home",
+      fonte_api._agg_winner({**_j88, "fullTime": {"home": 5, "away": 3}},
+                            EN2TLA["Egypt"], "Australia", "Egypt") == "Egypt")
+check("winner=null: placar de campo continua o regularTime (1x1), não o fullTime somado",
+      fonte_api._ko_field_score({"score": _j88})[:2] == (1, 1))
+_tA, _tB = _full["teams"][80]                               # end-to-end: 16-avos com winner=null propaga
+_mpen = {"stage": "LAST_32", "status": "FINISHED", "homeTeam": {"tla": EN2TLA[_tA]},
+         "awayTeam": {"tla": EN2TLA[_tB]},
+         "score": {"winner": None, "duration": "PENALTY_SHOOTOUT", "regularTime": {"home": 1, "away": 1},
+                   "extraTime": {"home": 0, "away": 0}, "fullTime": {"home": 3, "away": 5}}}
+_msP = [m for m in _ms if not (m["stage"] == "LAST_32"
+        and {m["homeTeam"]["tla"], m["awayTeam"]["tla"]} == {EN2TLA[_tA], EN2TLA[_tB]})] + [_mpen]
+_koP, _advP = fonte_api.parse_ko(_msP, _gp)
+check("parse_ko: 16-avos winner=null → placar (1,1) e advancer = quem venceu no fullTime (não bloqueia)",
+      _koP.get(80) == (1, 1) and _advP.get(80) == _tB)
 
 # ---------- 7) Imagem dos palpites do dia (imagem.py): cor 1-X-2 + intensidade por gols
 print("\n7) Imagem dos palpites do dia (imagem.py):")
