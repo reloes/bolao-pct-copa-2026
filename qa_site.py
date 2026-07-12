@@ -213,6 +213,31 @@ _msP = [m for m in _ms if not (m["stage"] == "LAST_32"
 _koP, _advP = fonte_api.parse_ko(_msP, _gp)
 check("parse_ko: 16-avos winner=null → placar (1,1) e advancer = quem venceu no fullTime (não bloqueia)",
       _koP.get(80) == (1, 1) and _advP.get(80) == _tB)
+# regressão do STATUS MALFORMADO (MEX×ENG oitavas, 06/jul): a API devolveu `status` = um timestamp em
+# vez de 'FINISHED' → o jogo sumia e a Inglaterra não subia p/ as quartas (NOR×ENG não encaixava).
+# _match_done conta se NÃO está pendente E tem resultado; mas um IN_PLAY com winner (líder do momento,
+# ARG×SUI 1×0 ao vivo) NÃO pode contar — por isso o status pendente é checado ANTES do winner.
+check("status malformado + placar → conta (MEX×ENG: status=timestamp, winner preenchido)",
+      fonte_api._match_done({"status": "2026-07-06 01:00:00Z",
+                             "score": {"winner": "AWAY_TEAM", "fullTime": {"home": 2, "away": 3}}}))
+check("IN_PLAY com winner (líder do momento) NÃO conta (ARG×SUI 1×0 ao vivo)",
+      not fonte_api._match_done({"status": "IN_PLAY",
+                                 "score": {"winner": "HOME_TEAM", "fullTime": {"home": 1, "away": 0}}}))
+check("FINISHED com winner=null mas fullTime completo conta (Egito)",
+      fonte_api._match_done({"status": "FINISHED",
+                             "score": {"winner": None, "fullTime": {"home": 3, "away": 5}}}))
+check("TIMED / malformado SEM resultado (ainda não jogado) NÃO conta",
+      not fonte_api._match_done({"status": "TIMED", "score": {"winner": None, "fullTime": {}}})
+      and not fonte_api._match_done({"status": "2026-07-20", "score": {"winner": None, "fullTime": {}}}))
+_eA, _eB = _full["teams"][92]                               # end-to-end: oitava com status malformado entra
+_jmal = {"stage": "LAST_16", "status": "2026-07-06 01:00:00Z",
+         "homeTeam": {"tla": EN2TLA[_eA]}, "awayTeam": {"tla": EN2TLA[_eB]},
+         "score": {"winner": "AWAY_TEAM", "duration": "REGULAR", "fullTime": {"home": 0, "away": 1}}}
+_msM = [m for m in _ms if not (m["stage"] == "LAST_16"
+        and {m["homeTeam"]["tla"], m["awayTeam"]["tla"]} == {EN2TLA[_eA], EN2TLA[_eB]})] + [_jmal]
+_koM, _advM = fonte_api.parse_ko(_msM, _gp)
+check("parse_ko: oitava com status malformado NÃO é mais descartada (placar 0x1 mapeado)",
+      _koM.get(92) == (0, 1))
 
 # ---------- 7) Imagem dos palpites do dia (imagem.py): cor 1-X-2 + intensidade por gols
 print("\n7) Imagem dos palpites do dia (imagem.py):")

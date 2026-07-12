@@ -71,12 +71,33 @@ def fetch_matches(token, retries=1):
     raise last
 
 
+# status que a API usa p/ jogo AINDA não decidido (não contar). O resto (FINISHED, AWARDED, ou até um
+# status MALFORMADO) conta SE tiver resultado utilizável — ver _match_done.
+_PENDENTE = frozenset({"SCHEDULED", "TIMED", "IN_PLAY", "PAUSED", "SUSPENDED", "POSTPONED", "CANCELLED"})
+
+
+def _match_done(m):
+    """Jogo concluído p/ nós. A API às vezes devolve `status` MALFORMADO (visto no MEX×ENG, oitavas de
+    06/jul: status = um timestamp em vez de 'FINISHED') → não dá pra exigir status == 'FINISHED', senão
+    o jogo some e trava tudo a jusante (a Inglaterra não subia p/ as quartas). Regra: NÃO estar num
+    status PENDENTE conhecido E ter resultado utilizável (winner decidido OU fullTime completo).
+    ⚠️ Não basta 'tem winner': um jogo IN_PLAY pode ter `winner` = líder do momento (ARG×SUI 1×0 ao
+    vivo) — por isso o status pendente é checado ANTES. Cobre também o FINISHED-com-winner-null (Egito)."""
+    if m.get("status") in _PENDENTE:
+        return False
+    s = m.get("score") or {}
+    if s.get("winner") in ("HOME_TEAM", "AWAY_TEAM"):
+        return True
+    ft = s.get("fullTime") or {}
+    return ft.get("home") is not None and ft.get("away") is not None
+
+
 def parse_group_scores(matches):
-    """{num: (g1,g2)} dos jogos de GROUP_STAGE FINISHED, na orientação (time1,time2) do fixture.
+    """{num: (g1,g2)} dos jogos de GROUP_STAGE concluídos, na orientação (time1,time2) do fixture.
     Casado por par de TLA; jogos não-terminados ou sem placar são ignorados (sem erro)."""
     out = {}
     for m in matches:
-        if m.get("stage") != "GROUP_STAGE" or m.get("status") != "FINISHED":
+        if m.get("stage") != "GROUP_STAGE" or not _match_done(m):
             continue
         ht = (m.get("homeTeam") or {}).get("tla")
         at = (m.get("awayTeam") or {}).get("tla")
@@ -128,9 +149,9 @@ def parse_ko(matches, group_scores):
     do campo `winner` da API. Só roda com os 72 grupos completos."""
     if len(group_scores) != 72:
         return {}, {}
-    api = {}                                        # par de TLAs -> match (mata-mata FINISHED, 2 times definidos)
+    api = {}                                        # par de TLAs -> match (mata-mata concluído, 2 times definidos)
     for m in matches:
-        if m.get("stage") not in KO_STAGES or m.get("status") != "FINISHED":
+        if m.get("stage") not in KO_STAGES or not _match_done(m):
             continue
         ht = (m.get("homeTeam") or {}).get("tla")
         at = (m.get("awayTeam") or {}).get("tla")
